@@ -27,3 +27,16 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             is_terms_service=validated_data['is_terms_service'],
         )
         return user
+
+#-------Google signin Serializer --------#
+class GoogleSignInSerializer(serializers.Serializer):
+    id_token = serializers.CharField()
+    
+    
+    
+#---------profile image serializer---------#
+class ProfileImageSerializer(serializers.ModelSerializer):
+    profile_picture = serializers.ImageField(use_url=True)
+    class Meta:
+        model = User
+        fields = ['profile_picture']

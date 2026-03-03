@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     #local apps
     'UserAuthentication',
+    'Products',
 ]
 
 MIDDLEWARE = [
@@ -125,6 +126,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 REST_FRAMEWORK ={
@@ -154,3 +156,7 @@ EMAIL_PORT = 587
 EMAIL_HOST_USER = 'payerahmed110@gmail.com'  
 EMAIL_HOST_PASSWORD = 'upwq tbtc kpga syvn'
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# Google Authentication
+GOOGLE_CLIENT_ID = "620271018280-r59n2ut8jtl6v7noqlboaj5l6tgbn8ja.apps.googleusercontent.com"
+Client_secret="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"

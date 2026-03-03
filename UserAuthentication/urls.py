@@ -10,5 +10,7 @@ urlpatterns = [
     path('forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
     path('verify-reset-code/', VerifyResetCodeView.as_view(), name='verify-reset-code'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
-    
+    path('refresh-token/', CustomTokenRefreshView.as_view(), name='refresh-token'),
+    path('google-login/', GoogleSignInView.as_view(), name='google-login'),
+    path('set-image-image/', GetProfileImageView.as_view(), name='set-image'),
 ]

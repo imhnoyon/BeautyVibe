@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from rest_framework.generics import CreateAPIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny,IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from utils.api_response import APIResponse
 from rest_framework.views import APIView
@@ -12,7 +13,8 @@ from .models import *
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from django.conf import settings
-
+from rest_framework.response import Response
+from django.utils import timezone
 
 # signup view for create a user .
 class SignupView(CreateAPIView):
@@ -188,6 +190,30 @@ class ResetPasswordView(APIView):
         return APIResponse.success(message="Password Reset Successful!", status_code=status.HTTP_200_OK)
 
 
+
+#---------Custom token refresh view to refresh access token using refresh token----------#
+class CustomTokenRefreshView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return APIResponse.error(message="Refresh token required", status_code=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            token = RefreshToken(refresh_token)
+            new_access = str(token.access_token)
+            return APIResponse.success(
+                message="Token refreshed successfully",
+                data={"access_token": new_access}
+            )
+        except Exception as e:
+            return APIResponse.error(message=str(e), status_code=status.HTTP_400_BAD_REQUEST)
+        
+        
+        
+        
+#--------Google signin view --------#
 class GoogleSignInView(APIView):
     permission_classes = [AllowAny]
 
@@ -239,3 +265,36 @@ class GoogleSignInView(APIView):
             return APIResponse.error(message="Invalid token", status_code=status.HTTP_400_BAD_REQUEST)
 
     
+    
+#--------Get profile image view ---------#
+class GetProfileImageView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, *args, **kwargs):
+        serializer = ProfileImageSerializer(request.user, context={'request': request})
+        profile_picture = serializer.data.get('profile_picture')
+        return APIResponse.success(
+            message="Profile image retrieved successfully",
+            data={'image': profile_picture, 'user_id': str(request.user.id)}
+        )
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        serializer = ProfileImageSerializer(instance=user, data=request.data, partial=True, context={'request': request})
+        
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Profile image updated successfully",
+                data={
+                    "image": serializer.data,
+                    "user_id": str(user.id),
+                }
+            )
+           
+        else:
+            return APIResponse.error(
+                message="Failed to update profile image",
+                data=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
