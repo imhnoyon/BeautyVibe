@@ -220,3 +220,112 @@ class DeleteSaveProductsView(APIView):
             message= 'Save product deleted successfully',
             status_code=status.HTTP_200_OK
         )
+
+
+class CartView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cart, created = Cart.objects.get_or_create(user=request.user)
+        serializer = CartSerializer(cart, context={'request': request})
+        return APIResponse.success(
+            message="Cart retrieved successfully",
+            data=serializer.data
+        )
+
+    def post(self, request):
+        cart, created = Cart.objects.get_or_create(user=request.user)
+        serializer = CartItemSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            product = serializer.validated_data['product']
+            quantity = serializer.validated_data.get('quantity', 1)
+            shade = serializer.validated_data.get('shade')
+            colour_hex = serializer.validated_data.get('colour_hex')
+            video = serializer.validated_data.get('video')
+            
+            # Check if item already in cart
+            cart_item = CartItems.objects.filter(
+                cart=cart, 
+                product=product,
+                shade=shade
+            ).first()
+            
+            if cart_item:
+                cart_item.quantity += quantity
+                cart_item.product_amount = cart_item.quantity * product.price
+                cart_item.save()
+            else:
+                cart_item = CartItems.objects.create(
+                    cart=cart,
+                    product=product,
+                    video=video,
+                    shade=shade,
+                    colour_hex=colour_hex,
+                    quantity=quantity,
+                    product_amount=quantity * product.price
+                )
+            
+            return APIResponse.success(
+                message="Item added to cart",
+                data=CartItemSerializer(cart_item, context={'request': request}).data,
+                status_code=status.HTTP_201_CREATED
+            )
+        return APIResponse.error(
+            message="Failed to add item to cart",
+            errors=serializer.errors
+        )
+
+
+class CartItemUpdateDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        cart_item = get_object_or_404(CartItems, pk=pk, cart__user=request.user)
+        quantity = request.data.get('quantity')
+        
+        if quantity is not None:
+            try:
+                quantity = int(quantity)
+                if quantity <= 0:
+                    cart_item.delete()
+                    return APIResponse.success(message="Item removed from cart")
+                
+                cart_item.quantity = quantity
+                cart_item.product_amount = cart_item.quantity * cart_item.product.price
+                cart_item.save()
+                return APIResponse.success(
+                    message="Cart updated",
+                    data=CartItemSerializer(cart_item, context={'request': request}).data
+                )
+            except ValueError:
+                return APIResponse.error(message="Invalid quantity")
+        
+        return APIResponse.error(message="Quantity is required")
+    def patch(self, request, pk):
+        cart_item = get_object_or_404(CartItems, pk=pk, cart__user=request.user)
+        quantity = request.data.get('quantity')
+        
+        if quantity is not None:
+            try:
+                quantity = int(quantity)
+                if quantity <= 0:
+                    cart_item.delete()
+                    return APIResponse.success(message="Item removed from cart")
+                
+                cart_item.quantity = quantity
+                cart_item.product_amount = cart_item.quantity * cart_item.product.price
+                cart_item.save()
+                return APIResponse.success(
+                    message="Cart updated",
+                    data=CartItemSerializer(cart_item, context={'request': request}).data
+                )
+            except ValueError:
+                return APIResponse.error(message="Invalid quantity")
+        
+        return APIResponse.error(message="Quantity is required")
+
+    def delete(self, request, pk):
+        cart_item = get_object_or_404(CartItems, pk=pk, cart__user=request.user)
+        cart_item.delete()
+        return APIResponse.success(message="Item removed from cart")

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, ProductCategory, SaveProducts
+from .models import Product, ProductCategory, SaveProducts, Cart, CartItems
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
@@ -127,3 +127,41 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         # Return other products that share the same name and brand (different shades)
         variants = Product.objects.filter(name=obj.name, brand=obj.brand).exclude(id=obj.id)
         return ProductVariantSerializer(variants, many=True, context=self.context).data
+
+
+
+class productviewcartserializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'brand', 'shade', 'colour_hex', 'price', 'discount_percentage', 'image']
+
+#Cart Serializers
+class CartItemSerializer(serializers.ModelSerializer):
+    product_details = productviewcartserializer(source='product', read_only=True)
+    # product_details = ProductListSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = CartItems
+        fields = [
+            'product',  'video', 'shade', 
+            'colour_hex', 'quantity', 'product_amount', 'product_details','created_at'
+        ]
+        read_only_fields = ['id', 'product_amount', 'created_at']
+
+    def validate(self, data):
+        if not data.get('product'):
+            raise serializers.ValidationError("Product is required")
+        return data
+
+
+class CartSerializer(serializers.ModelSerializer):
+    cart_items = CartItemSerializer(many=True, read_only=True)
+    total_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Cart
+        fields = ['id', 'user', 'cart_items', 'total_price', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+    def get_total_price(self, obj):
+        return sum(item.product_amount for item in obj.cart_items.all())
