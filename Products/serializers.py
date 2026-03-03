@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, ProductCategory
+from .models import Product, ProductCategory, SaveProducts
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
@@ -27,6 +27,8 @@ class ProductSerializer(serializers.ModelSerializer):
             'category',
             'colour_hex',
             'price',
+            'discount_percentage',
+            'rating',
             'description',
             'image',
             'created_at',
@@ -46,6 +48,8 @@ class ProductListSerializer(serializers.ModelSerializer):
             'brand',
             'shade',
             'price',
+            'discount_percentage',
+            'rating',
             'image'
         ]
 
@@ -61,3 +65,26 @@ class CategoryWithProductsSerializer(serializers.ModelSerializer):
             'slug',
             'products'
         ]
+        
+        
+        
+#Savedproduct model serializers----
+class SavedProductSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset = Product.objects.all(), source="product", write_only=True
+    )
+
+    class Meta:
+        model = SaveProducts
+        fields = [
+            "id",
+            "user",
+            "product",
+            "product_id",
+            "shade",
+            "colour_hex",
+            "saved_at"
+        ]
+
+        read_only_fields = ["id","saved_at","user","product"]
