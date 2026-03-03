@@ -92,3 +92,58 @@ class SaveProducts(models.Model):
 
     def __str__(self):
         return self.product.name
+    
+
+
+#-this is video model--
+class Video(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_videos')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='product_videos')
+    # look = models.ForeignKey(LookProducts, on_delete=models.PROTECT, related_name='look_videos')
+    caption = models.CharField(max_length=200)
+    product_type = models.CharField(max_length=100)
+    product_tag = models.CharField(max_length=200, null=True, blank=True)
+    shade = models.CharField(max_length=200)
+    video_url = models.URLField(null=True, blank=True)
+    # thumbnail = models.URLField(null=True, blank=True)
+    like_count = models.PositiveIntegerField(default=0)
+    share_count = models.PositiveIntegerField(default=0)
+    saved_video = models.PositiveIntegerField(default=0)
+
+    upload_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+#the model is add product in cart for buy---
+class Cart(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_cart')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.user.username
+    
+    
+#the model for hold all product---
+class CartItems(models.Model):
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='cart_items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True, related_name='cart_products')
+    video = models.ForeignKey(Video, on_delete=models.SET_NULL, null=True, blank=True, related_name='video_cart_items')
+    # look = models.ForeignKey(LookProducts, on_delete=models.PROTECT, related_name='cart_looks')
+    shade = models.CharField(max_length=200, null=True, blank=True)
+    colour_hex = models.CharField(max_length=200, null=True, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
+    product_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.cart.user.username

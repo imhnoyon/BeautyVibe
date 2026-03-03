@@ -90,6 +90,21 @@ class SavedProductSerializer(serializers.ModelSerializer):
         read_only_fields = ["id","saved_at","user","product"]
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#unkhown serializers  not working right now
 class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product

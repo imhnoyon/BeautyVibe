@@ -44,11 +44,22 @@ class ProductCreateView(APIView):
             )
         
         products = Product.objects.all()
-        serializer = ProductSerializer(products, many=True, context={'request': request})
+        
+        # ✅ Apply Pagination
+        paginator = self.paginator_class()
+        paginated_products = paginator.paginate_queryset(products, request)
+        serializer = ProductSerializer(paginated_products, many=True, context={'request': request})
         
         return APIResponse.success(
             message="Product list retrieved successfully",
-            data=serializer.data
+            data={
+                "total": products.count(),
+                "page": paginator.page.number,
+                "total_pages": paginator.page.paginator.num_pages,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "products": serializer.data
+            }
         )
         
     # 🔹 DELETE PRODUCT
@@ -116,7 +127,7 @@ class ProductDetailView(APIView):
 
     def get(self, request, pk):
         product = get_object_or_404(Product, pk=pk)
-        serializer = ProductDetailSerializer(product, context={'request': request})
+        serializer = ProductSerializer(product, context={'request': request})
         
         return APIResponse.success(
             message="Product detail retrieved successfully",
