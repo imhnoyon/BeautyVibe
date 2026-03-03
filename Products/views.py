@@ -9,6 +9,13 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from .pagination import CustomPagination
+import stripe
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse
+
+# Set stripe API key
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # create product and list all products or retrieve single product also delete product
 class ProductCreateView(APIView):
@@ -371,7 +378,7 @@ class CheckoutView(APIView):
                 delivery_charge=delivery_charge
             )
             
-            # Create OrderItems
+            # Create OrderItems (Snapshots)
             for item in cart_items:
                 OrderItem.objects.create(
                     order=order,
@@ -379,10 +386,11 @@ class CheckoutView(APIView):
                     shade=item.shade,
                     colour_hex=item.colour_hex,
                     quantity=item.quantity,
-                    price=item.product.price # Use current product price
+                    price=item.product.price
                 )
             
-            # Clear the cart items
+            # IMPORTANT: Do NOT clear cart yet if we want user to pay immediately?
+            # Actually, clearing it is fine because Order has the items now.
             cart_items.delete()
             
             return APIResponse.success(
@@ -396,73 +404,89 @@ class CheckoutView(APIView):
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
         )
-        
 
-     
-#Pyments integration will be done in next phase after order creation and order details are working fine
 
-import stripe
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from django.conf import settings
-from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse
 class CreateCheckoutSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        cart = request.user.user_cart
-        cart_items = cart.cart_items.all()
+        order_id = request.data.get('order_id')
+        if not order_id:
+            return APIResponse.error(message="Order ID is required")
+            
+        order = get_object_or_404(Order, id=order_id, user=request.user)
+        order_items = order.items.all()
 
-        if not cart_items.exists():
-            return APIResponse.error(
-                message="Cart is empty",
-                status_code=400
-            )
+        if not order_items.exists():
+            return APIResponse.error(message="Order has no items")
 
         line_items = []
 
-        for item in cart_items:
+        # Add products to line items
+        for item in order_items:
             line_items.append({
                 "price_data": {
                     "currency": "usd",
                     "product_data": {
-                        "name": item.product.name,
+                        "name": f"{item.product.name} ({item.shade})" if item.shade else item.product.name,
                     },
-                    "unit_amount": int(item.product.price * 100),
+                    "unit_amount": int(item.price * 100),
                 },
                 "quantity": item.quantity,
             })
+            
+        # Add delivery charge as a line item if > 0
+        if order.delivery_charge > 0:
+            line_items.append({
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": f"Delivery Charge ({order.get_delivery_method_display()})",
+                    },
+                    "unit_amount": int(order.delivery_charge * 100),
+                },
+                "quantity": 1,
+            })
 
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=line_items,
-            mode="payment",
-            success_url="http://localhost:3000/payment-success",
-            cancel_url="http://localhost:3000/payment-cancel",
-        )
+        try:
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=line_items,
+                mode="payment",
+                # Update these URLs with your real success/cancel pages
+                success_url="http://localhost:3000/payment-success?session_id={CHECKOUT_SESSION_ID}",
+                cancel_url="http://localhost:3000/payment-cancel",
+                metadata={
+                    "order_id": order.id
+                }
+            )
 
-        # Save Order
-        order = Order.objects.create(
-            user=request.user,
-            stripe_session_id=session.id,
-            total_amount=sum(item.product_amount for item in cart_items)
-        )
+            # Link stripe session to order
+            order.stripe_session_id = session.id
+            order.is_paid=True
+            order.status='processing' 
+            order.save()
 
-        return APIResponse.success(
-            message="Checkout session created",
-            data={
-                "checkout_url": session.url
-            },
-            status_code=201
-        )
-        
+            return APIResponse.success(
+                message="Checkout session created",
+                data={
+                    "checkout_url": session.url,
+                    "session_id": session.id
+                },
+                status_code=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return APIResponse.error(message=f"Stripe error: {str(e)}")
+            
         
 @csrf_exempt
 def stripe_webhook(request):
     payload = request.body
-    sig_header = request.META["HTTP_STRIPE_SIGNATURE"]
+    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
+
+    if not sig_header:
+        return HttpResponse(status=400)
 
     try:
         event = stripe.Webhook.construct_event(
@@ -471,15 +495,24 @@ def stripe_webhook(request):
     except Exception:
         return HttpResponse(status=400)
 
-    # Payment Success
+    # Handle the checkout.session.completed event
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-
-        order = Order.objects.get(stripe_session_id=session["id"])
-        order.is_paid = True
-        order.save()
-
-        # Optional: clear cart
-        order.user.user_cart.cart_items.all().delete()
+        
+        # We can use metadata to get order_id reliably
+        order_id = session.get("metadata", {}).get("order_id")
+        
+        try:
+            if order_id:
+                order = Order.objects.get(id=order_id)
+            else:
+                # Fallback to session ID lookup
+                order = Order.objects.get(stripe_session_id=session["id"])
+                
+            order.is_paid = True
+            order.status = 'processing' # Move from pending to processing
+            order.save()
+        except Order.DoesNotExist:
+            print(f"Order not found for session {session['id']}")
 
     return HttpResponse(status=200)
