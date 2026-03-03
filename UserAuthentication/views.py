@@ -295,6 +295,6 @@ class GetProfileImageView(APIView):
         else:
             return APIResponse.error(
                 message="Failed to update profile image",
-                data=serializer.errors,
+                errors=serializer.errors,
                 status_code=status.HTTP_400_BAD_REQUEST
             )

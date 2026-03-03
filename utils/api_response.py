@@ -27,7 +27,7 @@ class APIResponse:
         return Response(response_data, status=status_code)
 
     @staticmethod
-    def error(message="Error", errors=None, error_code=None, status_code=status.HTTP_400_BAD_REQUEST):
+    def error(message="Error", errors=None, error_code=None, status_code=status.HTTP_400_BAD_REQUEST, **kwargs):
         """
         Returns an error response.
         :param message: Error message string
@@ -36,6 +36,10 @@ class APIResponse:
         :param status_code: HTTP status code
         :return: Response object
         """
+        # Support 'data' as an alias for 'errors' to prevent TypeErrors
+        if errors is None and 'data' in kwargs:
+            errors = kwargs['data']
+
         response_data = {
             "success": False,
             "status": status_code,
