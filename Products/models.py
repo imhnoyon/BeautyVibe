@@ -73,7 +73,7 @@ class SavedLook(models.Model):
     class Meta:
         unique_together = ('user','product','shade')
 
-def __str__(self):
+    def __str__(self):
         return f"{self.user}'s saved {self.product} - {self.shade}"
     
     
@@ -147,3 +147,60 @@ class CartItems(models.Model):
 
     def __str__(self):
         return self.cart.user.email
+
+
+# --- Order and Checkout Models ---
+class Order(models.Model):
+    DELIVERY_METHODS = (
+        ('standard', 'Standard Delivery'),
+        ('next_day', 'Next-Day Delivery'),
+        ('same_day', 'Same-Day Delivery'),
+    )
+    
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled'),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
+    full_name = models.CharField(max_length=255)
+    mobile_number = models.CharField(max_length=20)
+    emirate = models.CharField(max_length=100)
+    area = models.CharField(max_length=255)
+    building_name = models.CharField(max_length=255)
+    apartment_no = models.CharField(max_length=100)
+    landmark = models.CharField(max_length=255, null=True, blank=True)
+    
+    delivery_method = models.CharField(max_length=20, choices=DELIVERY_METHODS, default='standard')
+    delivery_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    delivery_note = models.TextField(null=True, blank=True)
+    
+    stripe_session_id = models.CharField(max_length=255, null=True, blank=True)
+    is_paid = models.BooleanField(default=False)
+    
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Order {self.id} by {self.full_name}"
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    shade = models.CharField(max_length=200, null=True, blank=True)
+    colour_hex = models.CharField(max_length=200, null=True, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product.name if self.product else 'Unknown Product'}"

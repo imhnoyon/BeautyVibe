@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, ProductCategory, SaveProducts, Cart, CartItems
+from .models import Product, ProductCategory, SaveProducts, Cart, CartItems, Order, OrderItem
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
@@ -90,20 +90,6 @@ class SavedProductSerializer(serializers.ModelSerializer):
         read_only_fields = ["id","saved_at","user","product"]
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #unkhown serializers  not working right now
 class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
@@ -138,12 +124,11 @@ class productviewcartserializer(serializers.ModelSerializer):
 #Cart Serializers
 class CartItemSerializer(serializers.ModelSerializer):
     product_details = productviewcartserializer(source='product', read_only=True)
-    # product_details = ProductListSerializer(many=True, read_only=True)
     
     class Meta:
         model = CartItems
         fields = [
-            'product',  'video', 'shade', 
+            'id', 'product', 'video', 'shade', 
             'colour_hex', 'quantity', 'product_amount', 'product_details','created_at'
         ]
         read_only_fields = ['id', 'product_amount', 'created_at']
@@ -165,3 +150,31 @@ class CartSerializer(serializers.ModelSerializer):
 
     def get_total_price(self, obj):
         return sum(item.product_amount for item in obj.cart_items.all())
+
+
+# --- Order Serializers ---
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product_details = productviewcartserializer(source='product', read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'id', 'product', 'product_details', 'shade', 'colour_hex', 
+            'quantity', 'price'
+        ]
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'user', 'user_email', 'full_name', 'mobile_number', 'emirate', 
+            'area', 'building_name', 'apartment_no', 'landmark', 
+            'delivery_method', 'delivery_charge', 'delivery_note', 
+            'total_amount', 'status', 'items', 'created_at'
+        ]
+        read_only_fields = ['id', 'user', 'total_amount', 'status', 'created_at']

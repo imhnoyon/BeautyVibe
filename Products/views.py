@@ -282,26 +282,12 @@ class CartItemUpdateDeleteView(APIView):
 
     def get(self, request, pk):
         cart_item = get_object_or_404(CartItems, pk=pk, cart__user=request.user)
-        quantity = request.data.get('quantity')
-        
-        if quantity is not None:
-            try:
-                quantity = int(quantity)
-                if quantity <= 0:
-                    cart_item.delete()
-                    return APIResponse.success(message="Item removed from cart")
-                
-                cart_item.quantity = quantity
-                cart_item.product_amount = cart_item.quantity * cart_item.product.price
-                cart_item.save()
-                return APIResponse.success(
-                    message="Cart updated",
-                    data=CartItemSerializer(cart_item, context={'request': request}).data
-                )
-            except ValueError:
-                return APIResponse.error(message="Invalid quantity")
-        
-        return APIResponse.error(message="Quantity is required")
+        serializer = CartItemSerializer(cart_item, context={'request': request})
+        return APIResponse.success(
+            message="Item retrieved successfully",
+            data=serializer.data
+        )
+
     def patch(self, request, pk):
         cart_item = get_object_or_404(CartItems, pk=pk, cart__user=request.user)
         quantity = request.data.get('quantity')
@@ -314,18 +300,186 @@ class CartItemUpdateDeleteView(APIView):
                     return APIResponse.success(message="Item removed from cart")
                 
                 cart_item.quantity = quantity
-                cart_item.product_amount = cart_item.quantity * cart_item.product.price
+                # Ensure we have a product to calculate amount
+                if cart_item.product:
+                    cart_item.product_amount = cart_item.quantity * cart_item.product.price
                 cart_item.save()
+                
                 return APIResponse.success(
-                    message="Cart updated",
+                    message="Cart updated successfully",
                     data=CartItemSerializer(cart_item, context={'request': request}).data
                 )
             except ValueError:
-                return APIResponse.error(message="Invalid quantity")
+                return APIResponse.error(message="Invalid quantity value")
         
-        return APIResponse.error(message="Quantity is required")
+        return APIResponse.error(message="Quantity is required for update")
 
     def delete(self, request, pk):
         cart_item = get_object_or_404(CartItems, pk=pk, cart__user=request.user)
         cart_item.delete()
         return APIResponse.success(message="Item removed from cart")
+
+
+class CheckoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Pre-fill user data
+        user = request.user
+        data = {
+            "full_name": user.full_name or "",
+            "mobile_number": "", 
+            "emirate": "",
+            "area": "",
+            "building_name": "",
+            "apartment_no": "",
+            "landmark": "",
+            "delivery_methods": [
+                {"id": "standard", "name": "Standard Delivery", "charge": 0, "note": "Within 2-3 days"},
+                {"id": "next_day", "name": "Next-Day Delivery", "charge": 20, "note": "Today: 3-6 PM"},
+                {"id": "same_day", "name": "Same-Day Delivery", "charge": 30, "note": "Today: 3-6 PM"}
+            ]
+        }
+        return APIResponse.success(message="User info for checkout", data=data)
+
+    def post(self, request):
+        user = request.user
+        cart = get_object_or_404(Cart, user=user)
+        cart_items = cart.cart_items.all()
+        
+        if not cart_items.exists():
+            return APIResponse.error(message="Your cart is empty")
+
+        serializer = OrderSerializer(data=request.data)
+        if serializer.is_valid():
+            # Calculate total and delivery charge
+            delivery_method = serializer.validated_data.get('delivery_method', 'standard')
+            delivery_charges = {
+                'standard': 0,
+                'next_day': 20,
+                'same_day': 30
+            }
+            delivery_charge = delivery_charges.get(delivery_method, 0)
+            
+            cart_total = sum(item.product_amount for item in cart_items)
+            total_amount = cart_total + delivery_charge
+            
+            # Create the Order
+            order = serializer.save(
+                user=user, 
+                total_amount=total_amount,
+                delivery_charge=delivery_charge
+            )
+            
+            # Create OrderItems
+            for item in cart_items:
+                OrderItem.objects.create(
+                    order=order,
+                    product=item.product,
+                    shade=item.shade,
+                    colour_hex=item.colour_hex,
+                    quantity=item.quantity,
+                    price=item.product.price # Use current product price
+                )
+            
+            # Clear the cart items
+            cart_items.delete()
+            
+            return APIResponse.success(
+                message="Order created successfully",
+                data=OrderSerializer(order, context={'request': request}).data,
+                status_code=status.HTTP_201_CREATED
+            )
+        
+        return APIResponse.error(
+            message="Invalid checkout data",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+        
+
+     
+#Pyments integration will be done in next phase after order creation and order details are working fine
+
+import stripe
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse
+class CreateCheckoutSessionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        cart = request.user.user_cart
+        cart_items = cart.cart_items.all()
+
+        if not cart_items.exists():
+            return APIResponse.error(
+                message="Cart is empty",
+                status_code=400
+            )
+
+        line_items = []
+
+        for item in cart_items:
+            line_items.append({
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": item.product.name,
+                    },
+                    "unit_amount": int(item.product.price * 100),
+                },
+                "quantity": item.quantity,
+            })
+
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=line_items,
+            mode="payment",
+            success_url="http://localhost:3000/payment-success",
+            cancel_url="http://localhost:3000/payment-cancel",
+        )
+
+        # Save Order
+        order = Order.objects.create(
+            user=request.user,
+            stripe_session_id=session.id,
+            total_amount=sum(item.product_amount for item in cart_items)
+        )
+
+        return APIResponse.success(
+            message="Checkout session created",
+            data={
+                "checkout_url": session.url
+            },
+            status_code=201
+        )
+        
+        
+@csrf_exempt
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META["HTTP_STRIPE_SIGNATURE"]
+    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, endpoint_secret
+        )
+    except Exception:
+        return HttpResponse(status=400)
+
+    # Payment Success
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+
+        order = Order.objects.get(stripe_session_id=session["id"])
+        order.is_paid = True
+        order.save()
+
+        # Optional: clear cart
+        order.user.user_cart.cart_items.all().delete()
+
+    return HttpResponse(status=200)

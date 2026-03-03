@@ -12,4 +12,7 @@ urlpatterns = [
     # Cart URLs
     path('cart/', CartView.as_view(), name='cart'),
     path('cart/item/<int:pk>/', CartItemUpdateDeleteView.as_view(), name='cart-item-detail'),
+    
+    # Checkout URL
+    path('checkout/', CheckoutView.as_view(), name='checkout'),
 ]
