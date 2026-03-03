@@ -8,12 +8,13 @@ from utils.api_response import APIResponse
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-
+from .pagination import CustomPagination
 
 # create product and list all products or retrieve single product also delete product
 class ProductCreateView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    paginator_class =CustomPagination
     def post(self, request, *args, **kwargs):
         serializer = ProductSerializer(
             data=request.data,
@@ -41,9 +42,10 @@ class ProductCreateView(APIView):
                 message="Product retrieved successfully",
                 data=serializer.data
             )
-
+        
         products = Product.objects.all()
         serializer = ProductSerializer(products, many=True, context={'request': request})
+        
         return APIResponse.success(
             message="Product list retrieved successfully",
             data=serializer.data
@@ -65,49 +67,90 @@ class ProductCreateView(APIView):
 # Explore view with category filter and search Functionality
 class ExploreView(APIView):
     permission_classes = [IsAuthenticated]
-
+    pagination_class = CustomPagination
     def get(self, request):
         category_slug = request.query_params.get('category')
         search_query = request.query_params.get('search')
-
-        # Get all categories for the horizontal list
         categories = ProductCategory.objects.all()
         category_serializer = ProductCategorySerializer(categories, many=True)
-
-        # Start with all products
         products = Product.objects.all()
-
-        # Filter by category if provided
         if category_slug:
             products = products.filter(category__slug=category_slug)
 
-        # Filter by search query if provided
         if search_query:
             products = products.filter(
                 Q(name__icontains=search_query) |
                 Q(brand__icontains=search_query) |
                 Q(category__name__icontains=search_query)
             )
+            
+        total_products = products.count()
+        # ✅ Apply Pagination ONLY to products
+        paginator = self.pagination_class()
+        paginated_products = paginator.paginate_queryset(products, request)
 
-        product_serializer = ProductListSerializer(products, many=True, context={'request': request})
+        product_serializer = ProductListSerializer(
+            paginated_products,
+            many=True,
+            context={'request': request}
+        )
+        # product_serializer = ProductListSerializer(products, many=True, context={'request': request})
 
         return APIResponse.success(
             message="Explore data retrieved successfully",
             data={
                 "categories": category_serializer.data,
+                "total_products": total_products,
+                "page": paginator.page.number,
+                "total_pages": paginator.page.paginator.num_pages,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
                 "products": product_serializer.data
-            }
+            },
+            status_code=status.HTTP_200_OK
         )
-        
-        
-        
-        
-        
-class SaveProductsView(APIView):
+
+# Product details view with 
+class ProductDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+        serializer = ProductDetailSerializer(product, context={'request': request})
+        
+        return APIResponse.success(
+            message="Product detail retrieved successfully",
+            data=serializer.data
+        )
+
+#save product view for user to save products to their profile
+class SaveProductsView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+    # GET → List all saved products of user
+    def get(self, request):
+        saved_products = SaveProducts.objects.filter(
+            user=request.user
+        ).select_related('product')
+        
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(saved_products, request)
+        serializer = SavedProductSerializer(page, many=True, context={'request':request})
+
+        return APIResponse.success(
+            message="Saved products fetched successfully",
+            data={
+                "total": saved_products.count(),
+                "page": paginator.page.number,
+                "total_pages": paginator.page.paginator.num_pages,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "products": serializer.data
+            },
+            status_code=status.HTTP_200_OK
+        )
     def post(self, request):
-        serializer = SavedProductSerializer(data=request.data)
+        serializer = SavedProductSerializer(data=request.data,context={'request':request})
 
         if serializer.is_valid():
             product = serializer.validated_data['product']
@@ -140,4 +183,29 @@ class SaveProductsView(APIView):
             message="Invalid data",
             data=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
+        )
+        
+        
+        
+
+# save product delete view for user to delete saved products from their profile
+class DeleteSaveProductsView(APIView):
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, pk):
+        try:
+            delete_product = SaveProducts.objects.get(
+                id=pk,
+                user=request.user
+            )
+        except SaveProducts.DoesNotExist:
+            return APIResponse.error(
+                message='Save product not found',
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        delete_product.delete()
+
+        return APIResponse.success(
+            message= 'Save product deleted successfully',
+            status_code=status.HTTP_200_OK
         )

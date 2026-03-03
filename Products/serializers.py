@@ -88,3 +88,27 @@ class SavedProductSerializer(serializers.ModelSerializer):
         ]
 
         read_only_fields = ["id","saved_at","user","product"]
+
+
+class ProductVariantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'colour_hex', 'shade', 'image']
+
+
+class ProductDetailSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    variants = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = [
+            'id', 'name', 'slug', 'brand', 'shade', 'category_name', 
+            'colour_hex', 'price', 'discount_percentage', 
+            'rating', 'description', 'image', 'variants', 'created_at'
+        ]
+
+    def get_variants(self, obj):
+        # Return other products that share the same name and brand (different shades)
+        variants = Product.objects.filter(name=obj.name, brand=obj.brand).exclude(id=obj.id)
+        return ProductVariantSerializer(variants, many=True, context=self.context).data
