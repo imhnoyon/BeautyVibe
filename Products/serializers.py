@@ -8,7 +8,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         model = ProductCategory
         fields = ['id', 'name', 'slug']
 
-
+# product serializer for create and update product
 class ProductSerializer(serializers.ModelSerializer):
     category = serializers.SlugRelatedField(
         queryset=ProductCategory.objects.all(),
@@ -35,6 +35,8 @@ class ProductSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = ['id', 'slug', 'created_at']
+        
+
         
         
         
@@ -185,38 +187,38 @@ class OrderSerializer(serializers.ModelSerializer):
 # AI product recommendation serializer
 class ProductRecommendationSerializer(serializers.ModelSerializer):
     category = serializers.SlugRelatedField(queryset=ProductCategory.objects.all(), slug_field='name')
-    image = serializers.ImageField(required=False)
+    # image = serializers.ImageField(required=False)
 
     class Meta:
         model = Product
         fields = [
             'id',
             'name',
-            'slug',
+            # 'slug',
             'brand',
             'shade',
             'category',
             'colour_hex',
             'price',
-            'discount_percentage',
-            'rating',
+            # 'discount_percentage',
+            # 'rating',
             'description',
-            'image',
-            'created_at',
+            # 'image',
+            # 'created_at',
         ]
-        read_only_fields = ['id', 'slug', 'created_at']
+        read_only_fields = ['id']
 
 
-class ProfileImageSerializer(serializers.ModelSerializer):
-
+class UserProfileAIRecSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = [ 'skin_tone', 'undertone', 'face_shape', 'eye_color', 'confidence_score', 'summary']
+        fields = ['skin_tone', 'undertone', 'face_shape', 'eye_color', 'confidence_score', 'summary']
+        
 
 
 class RecommendationResponseSerializer(serializers.Serializer):
     user_id = serializers.CharField(source='id')  
-    user_profile = ProfileImageSerializer(source='*')  
+    user_profile = UserProfileAIRecSerializer(read_only=True)  
     products = ProductRecommendationSerializer(many=True)
 
     

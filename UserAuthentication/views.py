@@ -267,7 +267,7 @@ class GoogleSignInView(APIView):
     
     
 #--------Get profile image view ---------#
-from Products.ai_helper_function import send_to_ai_api
+from Products.ai_helper_function import send_to_ai_api, send_to_ai_recommendation
 class GetProfileImageView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -297,34 +297,43 @@ class GetProfileImageView(APIView):
             serializer.save()
             image = user.profile_picture  
             
-            #call ai helper function
+            # call ai helper function
             try:
                 ai_response = send_to_ai_api(
                     user_id=user.id,
                     image=image,
                     api_key=ai_api_key
                 )
-            except Exception as e:
-                return APIResponse.error(
-                    message=f"Failed to analyze image: {str(e)}",
-                    status_code=500
-                )
                 
-            # Map AI response to user fields
-            user.skin_tone = ai_response.get("skin_tone")
-            user.undertone = ai_response.get("undertone")
-            user.face_shape = ai_response.get("face_shape")
-            user.eye_color = ai_response.get("eye_color")
-            user.confidence_score = ai_response.get("confidence_score")
-            user.summary = ai_response.get("summary")
-            user.save()
-            
+                # Check if AI service returned an error dict instead of analysis
+                if ai_response and "error" not in ai_response:
+                    # Map AI response to user fields ONLY if no error
+                    user.skin_tone = ai_response.get("skin_tone", user.skin_tone)
+                    user.undertone = ai_response.get("undertone", user.undertone)
+                    user.face_shape = ai_response.get("face_shape", user.face_shape)
+                    user.eye_color = ai_response.get("eye_color", user.eye_color)
+                    user.confidence_score = ai_response.get("confidence_score", user.confidence_score)
+                    user.summary = ai_response.get("summary", user.summary)
+                    user.save()
+                    
+                    message = "Profile image updated & analyzed successfully"
+                else:
+                    message = "Profile updated, but AI analysis failed"
+                    
+            except Exception as e:
+                # Don't return error 500, just return success with a partial message
+                ai_response = {"error": f"AI service failed: {str(e)}"}
+                message = "Profile updated, but AI service was unreachable"
 
-        # Return updated serializer data
-            serializer = ProfileImageSerializer(user, context={'request': request})
+            # Return updated user data (including what we just saved)
+            # Use original serializer to include full profile info
+            final_serializer = ProfileImageSerializer(user, context={'request': request})
             return APIResponse.success(
-                message="Profile image updated & analyzed",
-                data=serializer.data
+                message=message,
+                data={
+    
+                    "ai_raw_response": ai_response
+                }
             )
           
         return APIResponse.error(
@@ -340,18 +349,29 @@ from Products.serializers import  RecommendationResponseSerializer
 class ProductRecommendationView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def post(self, request):
         user = request.user
         products = Product.objects.all()
+
+        ai_result = send_to_ai_recommendation(
+            user_profile=user,
+            products=products,
+            api_key=request.headers.get("X-API-KEY")
+        )
 
         serializer = RecommendationResponseSerializer(
             {
                 'id': str(user.id),
                 'user_profile': user,
                 'products': products
-            },context={'request': request}
+            },
+            context={'request': request}
         )
+
         return APIResponse.success(
             message="Recommendations fetched successfully",
-            data=serializer.data
+            data={
+                "user_data": serializer.data,
+                "ai_recommendations": ai_result
+            }
         )

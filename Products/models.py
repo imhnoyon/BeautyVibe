@@ -36,13 +36,14 @@ class Product(models.Model):
     slug = models.SlugField(unique=True, max_length=200, blank=True)  # increase to 200
     brand = models.CharField(max_length=200)
     shade = models.CharField(max_length=200)
-    category = models.ForeignKey(ProductCategory, on_delete=models.CASCADE, related_name='products')  # plural
-    colour_hex = models.CharField(max_length=7, null=True, blank=True)  # optional: store hex code properly (#RRGGBB)
+    category = models.ForeignKey(ProductCategory, on_delete=models.SET_NULL, related_name='products', null=True)  
+    colour_hex = models.CharField(max_length=7, null=True, blank=True)  
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percentage = models.PositiveIntegerField(default=0)
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=0.0)
     description = models.TextField()
     image = models.ImageField(upload_to='product_images/', null=True, blank=True)
+    video_url =models.FileField(upload_to='product_videos/',null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -94,31 +95,6 @@ class SaveProducts(models.Model):
         return self.product.name
     
 
-
-#-this is video model--
-class Video(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_videos')
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='product_videos')
-    # look = models.ForeignKey(LookProducts, on_delete=models.PROTECT, related_name='look_videos')
-    caption = models.CharField(max_length=200)
-    product_type = models.CharField(max_length=100)
-    product_tag = models.CharField(max_length=200, null=True, blank=True)
-    shade = models.CharField(max_length=200)
-    video_url = models.URLField(null=True, blank=True)
-    # thumbnail = models.URLField(null=True, blank=True)
-    like_count = models.PositiveIntegerField(default=0)
-    share_count = models.PositiveIntegerField(default=0)
-    saved_video = models.PositiveIntegerField(default=0)
-
-    upload_at = models.DateTimeField(auto_now_add=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-
-    class Meta:
-        ordering = ['-created_at']
-
-
 #the model is add product in cart for buy---
 class Cart(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_cart')
@@ -128,7 +104,7 @@ class Cart(models.Model):
     def __str__(self):
         return self.user.email
     
-    
+from UserProfile.models import Video
 #the model for hold all product---
 class CartItems(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='cart_items')

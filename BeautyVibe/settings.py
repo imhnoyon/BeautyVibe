@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     #local apps
     'UserAuthentication',
     'Products',
+    'UserProfile',
 ]
 
 MIDDLEWARE = [
@@ -171,4 +172,4 @@ STRIPE_WEBHOOK_SECRET = "whsec_d8955f155f40d295efaad8c62c022ee0142299b2ee5dd886e
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-AI_API_URL_image ="https://wbsl64n9-8004.inc1.devtunnels.ms"
+AI_API_URL ="https://wbsl64n9-8004.inc1.devtunnels.ms"

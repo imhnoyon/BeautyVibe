@@ -47,10 +47,10 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at')
     ordering = ('created_at',)
     
-@admin.register(Video)
-class VideoAdmin(admin.ModelAdmin):
-    list_display = ("user", "product", "caption", "created_at")
-    search_fields = ('user__username', 'product__name', 'caption')
-    list_filter = ('created_at',)
-    ordering = ('created_at',)
+# @admin.register(Video)
+# class VideoAdmin(admin.ModelAdmin):
+#     list_display = ("user", "product", "caption", "created_at")
+#     search_fields = ('user__username', 'product__name', 'caption')
+#     list_filter = ('created_at',)
+#     ordering = ('created_at',)
     

@@ -39,4 +39,4 @@ class ProfileImageSerializer(serializers.ModelSerializer):
     profile_picture = serializers.ImageField(use_url=True)
     class Meta:
         model = User
-        fields = ['profile_picture', 'skin_tone', 'undertone', 'face_shape', 'eye_color', 'confidence_score', 'summary']
+        fields = ['full_name','profile_picture', 'skin_tone', 'undertone', 'face_shape', 'eye_color','email', 'confidence_score', 'summary']
