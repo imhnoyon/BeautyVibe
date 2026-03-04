@@ -371,7 +371,7 @@ class ProductRecommendationView(APIView):
         return APIResponse.success(
             message="Recommendations fetched successfully",
             data={
-                "user_data": serializer.data,
+                # "user_data": serializer.data,
                 "ai_recommendations": ai_result
             }
         )

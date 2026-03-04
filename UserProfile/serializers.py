@@ -1,66 +1,81 @@
-# serializers.py
-from Products.serializers import ProductCategorySerializer, ProductSerializer
 from rest_framework import serializers
-from Products.models import ProductCategory, Video, Product
+from .models import Video
+from Products.models import Product, ProductCategory
+from Products.serializers import ProductSerializer
 
-
-
-#Video Upload Serializer
 class VideoUploadSerializer(serializers.ModelSerializer):
-    product_details = serializers.SerializerMethodField()
+    product_details = ProductSerializer(source='product', read_only=True)
+    name = serializers.CharField(write_only=True)
+    category = serializers.CharField(write_only=True)
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, write_only=True)
+    caption = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Video
         fields = [
-            'id',
-            'user',
-            'product',
-            'product_details',
-            'caption',
-            'product_type',
-            'shade',
-            'product_tag',
-            'video_url',
-            'created_at',
-            'updated_at'
+            'id', 'user', 'product', 'product_details', 
+            'name', 'category', 'shade', 'product_tag', 
+            'price', 'video_url', 'caption', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'video_url', 'user', 'product']
-
-    def validate(self, attrs):
-        product_type = attrs.get("product_type")
-        shade = attrs.get("shade")
-
-        try:
-            product = Product.objects.get(name=product_type, shade=shade)
-        except Product.DoesNotExist:
-            raise serializers.ValidationError({
-                'error': 'No product found with given product_type and shade'
-            })
-
-        attrs['product_instance'] = product
-        return attrs
+        read_only_fields = ['id', 'user', 'product', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        product = validated_data.pop('product_instance')
-        user = self.context['request'].user
+        try:
+            name = validated_data.pop('name', '').strip()
+            category_name = validated_data.pop('category', '').strip()
+            price = validated_data.pop('price', 0)
+            shade = validated_data.get('shade', '').strip()
+            caption = validated_data.pop('caption', None) # Pop caption, default to None if not provided
+            user = self.context['request'].user
 
-        video = Video.objects.create(
-            user=user,
-            product=product,
-            **validated_data
-        )
+            if not name or not category_name:
+                raise serializers.ValidationError("Product name and category are required")
 
-        if not user.creator:
-            user.creator = True
-            user.save(update_fields=['creator'])
+            if not caption: # If caption was not provided or was empty, default to product name
+                caption = name
 
-        return video
+            print(f"DEBUG: Processing upload for '{name}' in '{category_name}'")
 
-    def get_product_details(self, obj):
-        return ProductSerializer(obj.product).data
-    
-    
+            # 1. Get or Create Category
+            category, _ = ProductCategory.objects.get_or_create(name=category_name)
 
+            # 2. Get or Create Product (Handling duplicates safely)
+            product = Product.objects.filter(name=name, shade=shade).first()
+            
+            if not product:
+                product = Product.objects.create(
+                    name=name,
+                    shade=shade,
+                    category=category,
+                    price=price,
+                    brand='BeautyVibe',
+                    description=f"Added via video upload"
+                )
+                print(f"DEBUG: Created new product ID {product.id}")
+            else:
+                # If product existed but category was different or missing, update it
+                if not product.category or product.category != category:
+                    product.category = category
+                    product.save()
+                print(f"DEBUG: Found existing product ID {product.id}")
 
+            print(f"DEBUG: Using Product ID {product.id}")
 
+            # 3. Create Video linked to this product
+            video = Video.objects.create(
+                user=user,
+                product=product,
+                product_type=category_name,
+                caption=caption,
+                **validated_data
+            )
 
+            # Update creator status
+            if not user.creator:
+                user.creator = True
+                user.save(update_fields=['creator'])
+
+            return video
+        except Exception as e:
+            print(f"ERROR: {str(e)}")
+            raise serializers.ValidationError(str(e))

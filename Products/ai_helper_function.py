@@ -66,7 +66,7 @@ def send_to_ai_recommendation(user_profile, products, api_key):
     Sends user profile and product list to AI API for recommendations.
     No images are included.
     """
-    AI_API_URL = f"{settings.AI_API_URL}/recommend"
+    AI_API_URL = f"{settings.AI_API_URL}/api/v1/recommend"
 
     # Prepare the payload as JSON
     payload = {

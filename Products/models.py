@@ -104,12 +104,11 @@ class Cart(models.Model):
     def __str__(self):
         return self.user.email
     
-from UserProfile.models import Video
 #the model for hold all product---
 class CartItems(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='cart_items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True, related_name='cart_products')
-    video = models.ForeignKey(Video, on_delete=models.SET_NULL, null=True, blank=True, related_name='video_cart_items')
+    video = models.ForeignKey('UserProfile.Video', on_delete=models.SET_NULL, null=True, blank=True, related_name='video_cart_items')
     # look = models.ForeignKey(LookProducts, on_delete=models.PROTECT, related_name='cart_looks')
     shade = models.CharField(max_length=200, null=True, blank=True)
     colour_hex = models.CharField(max_length=200, null=True, blank=True)
