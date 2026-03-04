@@ -1,3 +1,4 @@
+from UserAuthentication.models import User
 from rest_framework import serializers
 from .models import Product, ProductCategory, SaveProducts, Cart, CartItems, Order, OrderItem
 
@@ -178,3 +179,44 @@ class OrderSerializer(serializers.ModelSerializer):
             'total_amount', 'status', 'items', 'created_at'
         ]
         read_only_fields = ['id', 'user', 'total_amount', 'status', 'created_at']
+        
+        
+        
+# AI product recommendation serializer
+class ProductRecommendationSerializer(serializers.ModelSerializer):
+    category = serializers.SlugRelatedField(queryset=ProductCategory.objects.all(), slug_field='name')
+    image = serializers.ImageField(required=False)
+
+    class Meta:
+        model = Product
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'brand',
+            'shade',
+            'category',
+            'colour_hex',
+            'price',
+            'discount_percentage',
+            'rating',
+            'description',
+            'image',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'slug', 'created_at']
+
+
+class ProfileImageSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = User
+        fields = [ 'skin_tone', 'undertone', 'face_shape', 'eye_color', 'confidence_score', 'summary']
+
+
+class RecommendationResponseSerializer(serializers.Serializer):
+    user_id = serializers.CharField(source='id')  
+    user_profile = ProfileImageSerializer(source='*')  
+    products = ProductRecommendationSerializer(many=True)
+
+    

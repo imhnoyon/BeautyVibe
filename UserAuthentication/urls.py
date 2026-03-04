@@ -12,5 +12,9 @@ urlpatterns = [
     path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
     path('refresh-token/', CustomTokenRefreshView.as_view(), name='refresh-token'),
     path('google-login/', GoogleSignInView.as_view(), name='google-login'),
+    
+    
+    # Product recommendation endpoint by AI
     path('set-image-image/', GetProfileImageView.as_view(), name='set-image'),
+    path('recommendations/', ProductRecommendationView.as_view(), name='product-recommendations'),
 ]

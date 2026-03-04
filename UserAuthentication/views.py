@@ -318,6 +318,7 @@ class GetProfileImageView(APIView):
             user.confidence_score = ai_response.get("confidence_score")
             user.summary = ai_response.get("summary")
             user.save()
+            
 
         # Return updated serializer data
             serializer = ProfileImageSerializer(user, context={'request': request})
@@ -330,4 +331,27 @@ class GetProfileImageView(APIView):
             message="Failed to update profile image",
             errors=serializer.errors,
             status_code=status.HTTP_400_BAD_REQUEST
+        )
+        
+        
+#product Recommendation view based on user profile analysis and preferences
+from Products.models import Product
+from Products.serializers import  RecommendationResponseSerializer
+class ProductRecommendationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        products = Product.objects.all()
+
+        serializer = RecommendationResponseSerializer(
+            {
+                'id': str(user.id),
+                'user_profile': user,
+                'products': products
+            },context={'request': request}
+        )
+        return APIResponse.success(
+            message="Recommendations fetched successfully",
+            data=serializer.data
         )
