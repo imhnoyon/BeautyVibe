@@ -2,13 +2,15 @@
 import requests
 import os
 import mimetypes
+from BeautyVibe import settings
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 from utils.api_response import APIResponse
 
+
 def send_to_ai_api(user_id, image, api_key):
-    AI_API_URL = f"https://wbsl64n9-8004.inc1.devtunnels.ms/api/v1/analyze?user_id={user_id}"
+    AI_API_URL = f"{settings.AI_API_URL_image}/api/v1/analyze?user_id={user_id}"
     
    
     content_type, _ = mimetypes.guess_type(image.name)

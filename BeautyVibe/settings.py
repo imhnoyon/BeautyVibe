@@ -169,3 +169,6 @@ STRIPE_PUBLISHABLE_KEY = "pk_test_51T3TvU3k43qHJ6v1raNTc4xEW9E8ZZ3ZCGkDCk3UQuccm
 STRIPE_WEBHOOK_SECRET = "whsec_d8955f155f40d295efaad8c62c022ee0142299b2ee5dd886e179768ab577c03a"
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+AI_API_URL_image ="https://wbsl64n9-8004.inc1.devtunnels.ms"

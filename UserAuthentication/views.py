@@ -273,11 +273,10 @@ class GetProfileImageView(APIView):
     
     def get(self, request, *args, **kwargs):
         serializer = ProfileImageSerializer(request.user, context={'request': request})
-        profile_picture = serializer.data.get('profile_picture')
         return APIResponse.success(
-            message="Profile image retrieved successfully",
-            data={'image': profile_picture, 'user_id': str(request.user.id)}
-        )
+        message="Profile image retrieved successfully",
+        data=serializer.data  
+    )
 
     def post(self, request, *args, **kwargs):
         ai_api_key = request.headers.get("X-API-KEY")
@@ -296,24 +295,37 @@ class GetProfileImageView(APIView):
 
         if serializer.is_valid():
             serializer.save()
-
             image = user.profile_picture  
+            
             #call ai helper function
-            ai_response = send_to_ai_api(
-                user_id=user.id,
-                image=image,
-                api_key=ai_api_key
-            )
+            try:
+                ai_response = send_to_ai_api(
+                    user_id=user.id,
+                    image=image,
+                    api_key=ai_api_key
+                )
+            except Exception as e:
+                return APIResponse.error(
+                    message=f"Failed to analyze image: {str(e)}",
+                    status_code=500
+                )
+                
+            # Map AI response to user fields
+            user.skin_tone = ai_response.get("skin_tone")
+            user.undertone = ai_response.get("undertone")
+            user.face_shape = ai_response.get("face_shape")
+            user.eye_color = ai_response.get("eye_color")
+            user.confidence_score = ai_response.get("confidence_score")
+            user.summary = ai_response.get("summary")
+            user.save()
 
+        # Return updated serializer data
+            serializer = ProfileImageSerializer(user, context={'request': request})
             return APIResponse.success(
                 message="Profile image updated & analyzed",
-                data={
-                    # "image": serializer.data,
-                    # "user_id": str(user.id),
-                    "ai_response": ai_response
-                }
+                data=serializer.data
             )
-
+          
         return APIResponse.error(
             message="Failed to update profile image",
             errors=serializer.errors,

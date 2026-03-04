@@ -12,9 +12,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     profile_picture = models.ImageField(upload_to="User/Profile_picture",blank=True, null=True)
     creator = models.BooleanField(default=False,null=True, blank=True)
 
-    skin_tone = models.CharField(max_length=50, blank=True)
-    undertone = models.CharField(max_length=50, blank=True)
-     
+    skin_tone = models.CharField(max_length=500, blank=True)
+    undertone = models.CharField(max_length=500, blank=True)
+    face_shape = models.CharField(max_length=500, blank=True,null=True)
+    eye_color = models.CharField(max_length=500, blank=True,null=True)
+    confidence_score = models.FloatField(null=True, blank=True)
+    summary=models.TextField(blank=True, null=True)
     stripe_account_id = models.CharField(max_length=255, null=True, blank=True)
 
     google_id = models.CharField(max_length=255, blank=True, null=True)
