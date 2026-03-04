@@ -267,6 +267,7 @@ class GoogleSignInView(APIView):
     
     
 #--------Get profile image view ---------#
+from Products.ai_helper_function import send_to_ai_api
 class GetProfileImageView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -279,22 +280,42 @@ class GetProfileImageView(APIView):
         )
 
     def post(self, request, *args, **kwargs):
+        ai_api_key = request.headers.get("X-API-KEY")
+        if not ai_api_key:
+            return APIResponse.error(
+                message="Missing AI API key in headers",
+                status_code=400
+            )
         user = request.user
-        serializer = ProfileImageSerializer(instance=user, data=request.data, partial=True, context={'request': request})
-        
+        serializer = ProfileImageSerializer(
+            instance=user,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+
         if serializer.is_valid():
             serializer.save()
+
+            image = user.profile_picture  
+            #call ai helper function
+            ai_response = send_to_ai_api(
+                user_id=user.id,
+                image=image,
+                api_key=ai_api_key
+            )
+
             return APIResponse.success(
-                message="Profile image updated successfully",
+                message="Profile image updated & analyzed",
                 data={
-                    "image": serializer.data,
-                    "user_id": str(user.id),
+                    # "image": serializer.data,
+                    # "user_id": str(user.id),
+                    "ai_response": ai_response
                 }
             )
-           
-        else:
-            return APIResponse.error(
-                message="Failed to update profile image",
-                errors=serializer.errors,
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
+
+        return APIResponse.error(
+            message="Failed to update profile image",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )

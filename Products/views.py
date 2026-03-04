@@ -516,3 +516,8 @@ def stripe_webhook(request):
             print(f"Order not found for session {session['id']}")
 
     return HttpResponse(status=200)
+
+
+
+
+
