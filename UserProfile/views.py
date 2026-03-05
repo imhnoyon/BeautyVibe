@@ -3,28 +3,135 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
 from .models import Video
-from .serializers import VideoUploadSerializer
+from .serializers import *
 from utils.api_response import APIResponse
 
-class VideoUploadView(APIView):
+class ProductCategoryListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        categories = ProductCategory.objects.all().order_by("name")
+        serializer = ProductCategorySerializer(categories, many=True)
+
+        return APIResponse.success(
+            message="Categories fetched successfully",
+            data=serializer.data
+        )
+        
+# show products by category       
+from Products.pagination import CustomPagination
+class ProductByCategoryView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request, category_id):
+        products = Product.objects.filter(
+            category_id=category_id
+        ).order_by("name")
+
+        paginator = self.pagination_class()
+        paginated_products = paginator.paginate_queryset(products, request)
+
+        serializer = ProductSerializer(paginated_products, many=True)
+
+        return paginator.get_paginated_response({
+            "message": "Products fetched successfully",
+            "data": serializer.data
+        })
+        
+
+# For video upload related to product
+from django.shortcuts import get_object_or_404
+
+class ProductVideoUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+        
+    def post(self, request, product_id):
 
-    def post(self, request):
-        serializer = VideoUploadSerializer(
-            data=request.data,
-            context={'request': request}
-        )
+        product = get_object_or_404(Product, id=product_id)
+
+        serializer = ProductVideoSerializer(data=request.data, context={"request": request})
+
         if serializer.is_valid():
-            video = serializer.save()
+            serializer.save(
+                product=product,
+                user=request.user
+            )
             return APIResponse.success(
                 message="Video uploaded successfully",
-                data=VideoUploadSerializer(video, context={'request': request}).data,
-                status_code=status.HTTP_201_CREATED
+                data=serializer.data,
+                status_code=201
             )
-        
         return APIResponse.error(
-            message="Failed to upload video",
-            errors=serializer.errors,
-            status_code=status.HTTP_400_BAD_REQUEST
+            message="Invalid data provided",
+            errors=serializer.errors
         )
+        
+        
+class UserVideoListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        videos = Video.objects.filter(user=request.user).order_by("-created_at")
+        serializer = ProductVideoSerializer(videos, many=True , context={"request": request})
+
+        return APIResponse.success(
+            message="User videos fetched successfully",
+            data=serializer.data
+        )
+        
+
+#video watch view to register views for a video
+class VideoWatchView(APIView):
+    """
+    POST /videos/watch/{video_id}/  -> register a view
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, video_id):
+        video = get_object_or_404(Video, id=video_id)
+
+        # optional: prevent multiple views by same user in short time (not added now)
+        VideoView.objects.create(video=video, user=request.user)
+
+        total_views = VideoView.objects.filter(video=video).count()
+
+        return APIResponse.success(
+            message="View registered",
+            data={"video_id": video.id, "views": total_views}
+        )
+        
+
+from django.db.models import Count, Sum
+from .models import Commission
+class CreatorDashboardView(APIView):
+    """
+    GET /creator/dashboard/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        creator = request.user
+
+        total_views = VideoView.objects.filter(video__user=creator).count()
+
+        # Sales + commission (based on Commission table)
+        agg = Commission.objects.filter(creator=creator).aggregate(
+            total_sales=Sum("order_amount"),
+            total_commission=Sum("commission_amount")
+        )
+
+        total_sales = agg["total_sales"] or 0
+        total_commission = agg["total_commission"] or 0
+
+        return APIResponse.success(
+            message="Dashboard data fetched",
+            data={
+                "views": total_views,
+                "sales": float(total_sales),
+                "commission_earned": float(total_commission),
+            }
+        )
+        
+        

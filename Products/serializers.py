@@ -8,6 +8,9 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         model = ProductCategory
         fields = ['id', 'name', 'slug']
 
+
+
+
 # product serializer for create and update product
 class ProductSerializer(serializers.ModelSerializer):
     category = serializers.SlugRelatedField(
@@ -222,3 +225,13 @@ class RecommendationResponseSerializer(serializers.Serializer):
     products = ProductRecommendationSerializer(many=True)
 
     
+    
+    
+
+
+#product category serializer for create and update category
+class ProductCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductCategory
+        fields = ["id", "name", "slug", "created_at", "updated_at"]
+        read_only_fields = ["id", "slug", "created_at", "updated_at"]

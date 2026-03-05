@@ -520,4 +520,83 @@ def stripe_webhook(request):
 
 
 
+# Category list and create category view for admin
+class ProductCategoryView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+    
+    def get(self, request):
+        categories = ProductCategory.objects.all().order_by("-id")
 
+        paginator = self.paginator_class()
+        paginated_queryset = paginator.paginate_queryset(categories, request)
+
+        serializer = ProductCategorySerializer(paginated_queryset, many=True)
+
+        return paginator.get_paginated_response({
+            "success": True,
+            "message": "Category list fetched successfully",
+            "categories": serializer.data
+        })
+
+
+    def post(self, request):
+        serializer = ProductCategorySerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Category created successfully",
+                data=serializer.data,
+                status_code=201
+            )
+
+        return APIResponse.error(
+            message="Invalid data provided",
+            errors=serializer.errors,
+            status_code=400
+        )
+        
+    def put(self, request, pk):
+        category = get_object_or_404(ProductCategory, pk=pk)
+        serializer = ProductCategorySerializer(category, data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Category updated successfully",
+                data=serializer.data
+            )
+
+        return APIResponse.error(
+            message="Invalid data provided",
+            errors=serializer.errors
+        )
+
+    def patch(self, request, pk):
+        category = get_object_or_404(ProductCategory, pk=pk)
+        serializer = ProductCategorySerializer(
+            category, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Category partially updated successfully",
+                data=serializer.data
+            )
+
+        return APIResponse.error(
+            message="Invalid data provided",
+            errors=serializer.errors
+        )
+
+    
+    def delete(self, request, pk):
+        category = get_object_or_404(ProductCategory, pk=pk)
+        category.delete()
+
+        return APIResponse.success(
+            message="Category deleted successfully",
+            status_code=204
+        )

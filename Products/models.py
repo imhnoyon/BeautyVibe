@@ -36,7 +36,7 @@ class Product(models.Model):
     slug = models.SlugField(unique=True, max_length=200, blank=True)  # increase to 200
     brand = models.CharField(max_length=200)
     shade = models.CharField(max_length=200)
-    category = models.ForeignKey(ProductCategory, on_delete=models.SET_NULL, related_name='products', null=True)  
+    category = models.ForeignKey(ProductCategory, on_delete=models.CASCADE, related_name='products', null=True)  
     colour_hex = models.CharField(max_length=7, null=True, blank=True)  
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percentage = models.PositiveIntegerField(default=0)
