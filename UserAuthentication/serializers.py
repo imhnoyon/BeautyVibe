@@ -1,3 +1,4 @@
+from Products.models import Product
 from rest_framework import serializers
 from .models import User  
 
@@ -40,3 +41,11 @@ class ProfileImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['full_name','profile_picture', 'skin_tone', 'undertone', 'face_shape', 'eye_color','email', 'confidence_score', 'summary']
+        
+        
+        
+        
+class ProductRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'colour_hex', 'category','colour_hex', 'price', 'description','image', 'created_at', 'updated_at']

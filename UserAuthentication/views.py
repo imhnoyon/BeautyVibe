@@ -346,32 +346,77 @@ class GetProfileImageView(APIView):
 #product Recommendation view based on user profile analysis and preferences
 from Products.models import Product
 from Products.serializers import  RecommendationResponseSerializer
+# class ProductRecommendationView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         user = request.user
+#         products = Product.objects.all()
+
+#         ai_result = send_to_ai_recommendation(
+#             user_profile=user,
+#             products=products,
+#             api_key=request.headers.get("X-API-KEY")
+#         )
+
+#         serializer = RecommendationResponseSerializer(
+#             {
+#                 'id': str(user.id),
+#                 'user_profile': user,
+#                 'products': products
+#             },
+#             context={'request': request}
+#         )
+
+#         return APIResponse.success(
+#             message="Recommendations fetched successfully",
+#             data={
+#                 # "user_data": serializer.data,
+#                 "ai_recommendations": ai_result
+#             }
+#         )
+
+
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+
 class ProductRecommendationView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
+
+        # get all products
         products = Product.objects.all()
 
+        # send data to AI
         ai_result = send_to_ai_recommendation(
             user_profile=user,
             products=products,
             api_key=request.headers.get("X-API-KEY")
         )
 
-        serializer = RecommendationResponseSerializer(
-            {
-                'id': str(user.id),
-                'user_profile': user,
-                'products': products
-            },
-            context={'request': request}
+        # If AI returned error
+        if "error" in ai_result:
+            return APIResponse.error(message=ai_result["error"])
+
+        # AI expected to return product ids
+        recommended_ids = ai_result.get("best_match_id", [])
+        print("Recommended product IDs from AI:", recommended_ids)  # Debug log
+
+        # Filter recommended products
+        recommended_products = Product.objects.filter(id__in=recommended_ids)
+
+        serializer = ProductRecommendationSerializer(
+            recommended_products,
+            many=True,
+            context={"request": request}
         )
 
         return APIResponse.success(
             message="Recommendations fetched successfully",
             data={
-                # "user_data": serializer.data,
-                "ai_recommendations": ai_result
+                "ai_response": ai_result,
+                "recommended_products": serializer.data
             }
         )
