@@ -1,4 +1,4 @@
-from Products.models import Order
+from Products.models import Order, OrderItem
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -164,10 +164,10 @@ class ProductReviewView(APIView):
         product = get_object_or_404(Product, id=product_id)
 
         # ✅ Only buyers can review
-        bought = Order.objects.filter(
-            user=request.user,
+        bought = OrderItem.objects.filter(
+            order__user=request.user,
             product=product,
-            status="paid"
+            order__status="paid"
         ).exists()
 
         if not bought:
@@ -199,3 +199,24 @@ class ProductReviewView(APIView):
             errors=serializer.errors,
             status_code=400
         )
+        
+        
+        
+        
+        
+class OrderHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    def get(self, request):
+        qs = Order.objects.filter(user=request.user).prefetch_related("items").order_by("-created_at")
+
+        paginator = self.paginator_class()
+        paginated = paginator.paginate_queryset(qs, request)
+
+        serializer = OrderSerializer(paginated, many=True, context={"request": request})
+        return paginator.get_paginated_response({
+            "success": True,
+            "message": "Order history fetched successfully",
+            "orders": serializer.data
+        })

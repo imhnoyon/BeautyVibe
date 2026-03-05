@@ -62,7 +62,7 @@ class ProductReview(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        unique_together = ("user", "product")  # one review per user per product
+        unique_together = ("user", "product")  
 
     def __str__(self):
-        return f"{self.product.name} - {self.user.username} ({self.rating})"
+        return f"{self.product.name} - {self.user.full_name} ({self.rating})"

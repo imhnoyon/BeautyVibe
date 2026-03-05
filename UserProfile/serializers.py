@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import ProductReview, Video, VideoView
-from Products.models import Product, ProductCategory
-from Products.serializers import ProductSerializer
+from Products.models import Order, OrderItem, Product, ProductCategory
+from Products.serializers import ProductSerializer, productviewcartserializer
 
 class ProductCategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -29,6 +29,7 @@ class VideoViewSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "user", "viewed_at"]
         
         
+#serializer for product review with user details   
 class ProductReviewSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="user.full_name", read_only=True)
 
@@ -41,3 +42,22 @@ class ProductReviewSerializer(serializers.ModelSerializer):
         if value < 1 or value > 5:
             raise serializers.ValidationError("Rating must be between 1 and 5.")
         return value
+    
+    
+
+
+# serializers for order and order item for show order history with product details
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = productviewcartserializer(read_only=True)
+    class Meta:
+        model = OrderItem
+        fields = ["id","quantity", 'price',"product"]
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = ["id", "status", "total_amount",  "delivery_method" 
+                  , "created_at", "is_paid", "items"]
+        read_only_fields = ["id", "status", "total_amount", "created_at", "is_paid"]
