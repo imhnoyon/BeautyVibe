@@ -10,4 +10,7 @@ urlpatterns = [
     
     # ✅ creator dashboard
     path("creator/dashboard/", CreatorDashboardView.as_view(), name="creator-dashboard"),
+    
+     # product reviews
+    path("products/reviews/<int:product_id>", ProductReviewView.as_view(), name="product-reviews"),
 ]

@@ -464,7 +464,7 @@ class CreateCheckoutSessionView(APIView):
             # Link stripe session to order
             order.stripe_session_id = session.id
             order.is_paid=True
-            order.status='processing' 
+            order.status='paid'
             order.save()
 
             return APIResponse.success(

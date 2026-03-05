@@ -1,3 +1,4 @@
+from Products.models import Order
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -135,3 +136,66 @@ class CreatorDashboardView(APIView):
         )
         
         
+
+# review related views
+class ProductReviewView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class = CustomPagination
+
+    # ✅ list reviews of a product (paginated)
+    def get(self, request, product_id):
+        product = get_object_or_404(Product, id=product_id)
+        qs = ProductReview.objects.filter(product=product).select_related("user").order_by("-id")
+
+        paginator = self.paginator_class()
+        paginated = paginator.paginate_queryset(qs, request)
+
+        serializer = ProductReviewSerializer(paginated, many=True)
+        return paginator.get_paginated_response({
+            "success": True,
+            "message": "Reviews fetched successfully",
+            "product_id": product.id,
+            "product_name": product.name,
+            "reviews": serializer.data
+        })
+
+    # ✅ create review for a product
+    def post(self, request, product_id):
+        product = get_object_or_404(Product, id=product_id)
+
+        # ✅ Only buyers can review
+        bought = Order.objects.filter(
+            user=request.user,
+            product=product,
+            status="paid"
+        ).exists()
+
+        if not bought:
+            return APIResponse.error(
+                message="You must buy this product before reviewing.",
+                status_code=403
+            )
+
+        serializer = ProductReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            review, created = ProductReview.objects.update_or_create(
+                user=request.user,
+                product=product,
+                defaults={
+                    "rating": serializer.validated_data["rating"],
+                    "comment": serializer.validated_data.get("comment", "")
+                }
+            )
+
+            data = ProductReviewSerializer(review).data
+            return APIResponse.success(
+                message="Review submitted successfully" if created else "Review updated successfully",
+                data=data,
+                status_code=201 if created else 200
+            )
+
+        return APIResponse.error(
+            message="Invalid data",
+            errors=serializer.errors,
+            status_code=400
+        )
