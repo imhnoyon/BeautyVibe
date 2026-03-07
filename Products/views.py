@@ -249,7 +249,13 @@ class CartView(APIView):
 
     def post(self, request):
         cart, created = Cart.objects.get_or_create(user=request.user)
-        serializer = CartItemSerializer(data=request.data)
+        
+        # If frontend sends video_id instead of video, DRF might ignore it. Let's inject it to be safe.
+        data = request.data.copy()
+        if "video_id" in data and "video" not in data:
+            data["video"] = data["video_id"]
+            
+        serializer = CartItemSerializer(data=data)
         
         if serializer.is_valid():
             product = serializer.validated_data['product']
@@ -268,6 +274,8 @@ class CartView(APIView):
             if cart_item:
                 cart_item.quantity += quantity
                 cart_item.product_amount = cart_item.quantity * product.price
+                if video: # Always attribution to latest video if they added more from it
+                    cart_item.video = video
                 cart_item.save()
             else:
                 cart_item = CartItems.objects.create(
@@ -278,6 +286,7 @@ class CartView(APIView):
                     colour_hex=colour_hex,
                     quantity=quantity,
                     product_amount=quantity * product.price
+
                 )
             
             return APIResponse.success(
@@ -390,22 +399,20 @@ class CheckoutView(APIView):
                 OrderItem.objects.create(
                     order=order,
                     product=item.product,
+                    video=item.video,
                     shade=item.shade,
                     colour_hex=item.colour_hex,
                     quantity=item.quantity,
                     price=item.product.price
                 )
                 
-            # Handle commission for video if video_id is provided
-            if video_id:
-                video = Video.objects.filter(id=video_id, product=product).first()
-                if video:
-                    commission_amount = (product.price * product.quantity) * 0.10
-
+                # Check for video commission right when order is placed
+                if getattr(item, 'video', None):
+                    commission_amount = float(item.product.price * item.quantity) * 0.10
                     Commission.objects.create(
-                        creator=video.user,   
-                        video=video,
-                        order_amount=product.price * product.quantity,
+                        creator=item.video.user,   
+                        video=item.video,
+                        order_amount=item.product.price * item.quantity,
                         commission_amount=commission_amount
                     )
 
@@ -529,9 +536,22 @@ def stripe_webhook(request):
                 # Fallback to session ID lookup
                 order = Order.objects.get(stripe_session_id=session["id"])
                 
-            order.is_paid = True
-            order.status = 'processing' # Move from pending to processing
-            order.save()
+            if not order.is_paid:
+                order.is_paid = True
+                order.status = 'processing' # Move from pending to processing
+                order.save()
+                
+                # Distribute commissions to creators if they made the sale!
+                for item in order.items.all():
+                    if getattr(item, 'video', None):
+                        commission_amount = float(item.price * item.quantity) * 0.10
+                        Commission.objects.create(
+                            creator=item.video.user,
+                            video=item.video,
+                            order_amount=item.price * item.quantity,
+                            commission_amount=commission_amount
+                        )
+
         except Order.DoesNotExist:
             print(f"Order not found for session {session['id']}")
 

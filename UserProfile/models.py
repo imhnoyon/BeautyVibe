@@ -23,6 +23,9 @@ class Video(models.Model):
     class Meta:
         ordering = ['-created_at']
         
+    def __str__(self):
+        return f"Video {self.id} by {self.user.full_name} for {self.product.name}"
+        
         
         
 #The model for video view count and user who view the video
@@ -30,6 +33,7 @@ class VideoView(models.Model):
     video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='views')
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)  # optional for anonymous
     viewed_at = models.DateTimeField(auto_now_add=True)
+    
     
     
     
@@ -48,6 +52,8 @@ class Commission(models.Model):
             models.Index(fields=["creator"]),
         ]
         
+    def __str__(self):
+        return f"Commission for {self.creator.full_name} - Order: {self.order_amount}, Commission: {self.commission_amount}"
         
         
 class ProductReview(models.Model):

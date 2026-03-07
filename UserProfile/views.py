@@ -78,7 +78,7 @@ class UserVideoListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        videos = Video.objects.filter(user=request.user).order_by("-created_at")
+        videos = Video.objects.order_by("-created_at")
         serializer = ProductVideoSerializer(videos, many=True , context={"request": request})
 
         return APIResponse.success(

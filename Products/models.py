@@ -171,6 +171,7 @@ class Order(models.Model):
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    video = models.ForeignKey('UserProfile.Video', on_delete=models.SET_NULL, null=True, blank=True, related_name='order_items_video')
     shade = models.CharField(max_length=200, null=True, blank=True)
     colour_hex = models.CharField(max_length=200, null=True, blank=True)
     quantity = models.PositiveIntegerField(default=1)
