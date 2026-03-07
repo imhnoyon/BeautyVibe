@@ -25,6 +25,8 @@ urlpatterns = [
     path('admin/dashboard/', AdminDashboardAPIView.as_view(), name='admin-dashboard'),
     path("users/", UserAPIView.as_view()),
     path("users/<uuid:user_id>/", UserAPIView.as_view()),
+    path("users-creators/", UsercreatorAPIView.as_view()),
+    path("users-creators/<uuid:user_id>/", UsercreatorAPIView.as_view()),
     
     
     

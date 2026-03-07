@@ -666,3 +666,54 @@ class UserAPIView(APIView):
         )
 
         return paginator.get_paginated_response(serializer.data)
+    
+    
+    
+    
+# user creator details view   
+class UsercreatorAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request, user_id=None):
+
+        # USER DETAILS
+        if user_id:
+            user = get_object_or_404(
+                User.objects.filter(is_superuser=False).prefetch_related(
+                    "orders__items__product"
+                ),
+                id=user_id
+            )
+
+            serializer = UserDetailSerializer(
+                user,
+                context={"request": request}
+            )
+
+            return APIResponse.success(
+                message="User details retrieved successfully",
+                data=serializer.data
+            )
+
+        # USER LIST
+        search = request.query_params.get("search")
+
+        users = User.objects.filter(is_superuser=False,creator=True)
+
+        if search:
+            users = users.filter(
+                Q(full_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(users, request)
+
+        serializer = UserListSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(serializer.data)
