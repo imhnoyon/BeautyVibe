@@ -59,6 +59,10 @@ class ProductVideoUploadView(APIView):
                 product=product,
                 user=request.user
             )
+            user=request.user
+            user.creator=True
+            user.save()
+            
             return APIResponse.success(
                 message="Video uploaded successfully",
                 data=serializer.data,

@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.text import slugify
+from BeautyVibe import settings
 from UserAuthentication.models import User
 
 
@@ -177,3 +178,19 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name if self.product else 'Unknown Product'}"
+    
+    
+    
+    
+    
+class OrderHistory(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='history')
+    status = models.CharField(max_length=20)
+    note = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Order {self.order.id} - {self.status}"

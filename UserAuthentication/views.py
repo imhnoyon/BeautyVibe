@@ -1,3 +1,5 @@
+import datetime
+
 from django.shortcuts import render
 from rest_framework.generics import CreateAPIView
 from rest_framework.permissions import AllowAny,IsAuthenticated
@@ -344,79 +346,323 @@ class GetProfileImageView(APIView):
         
         
 #product Recommendation view based on user profile analysis and preferences
-from Products.models import Product
-from Products.serializers import  RecommendationResponseSerializer
-class ProductRecommendationView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        products = Product.objects.all()
-
-        ai_result = send_to_ai_recommendation(
-            user_profile=user,
-            products=products,
-            api_key=request.headers.get("X-API-KEY")
-        )
-
-        serializer = RecommendationResponseSerializer(
-            {
-                'id': str(user.id),
-                'user_profile': user,
-                'products': products
-            },
-            context={'request': request}
-        )
-
-        return APIResponse.success(
-            message="Recommendations fetched successfully",
-            data={
-                # "user_data": serializer.data,
-                "ai_recommendations": ai_result
-            }
-        )
-
-
-# from rest_framework.views import APIView
-# from rest_framework.permissions import IsAuthenticated
+# from Products.models import Product, ProductCategory
+# from Products.serializers import  RecommendationResponseSerializer
 
 # class ProductRecommendationView(APIView):
 #     permission_classes = [IsAuthenticated]
 
 #     def post(self, request):
 #         user = request.user
-
-#         # get all products
 #         products = Product.objects.all()
-
-#         # send data to AI
+#         categories=ProductCategory.objects.all()
+        
 #         ai_result = send_to_ai_recommendation(
 #             user_profile=user,
 #             products=products,
+#             category=categories,
 #             api_key=request.headers.get("X-API-KEY")
 #         )
 
-#         # If AI returned error
-#         if "error" in ai_result:
-#             return APIResponse.error(message=ai_result["error"])
-
-#         # AI expected to return product ids
-#         recommended_ids = ai_result.get("best_match_id", [])
-#         print("Recommended product IDs from AI:", recommended_ids)  
-
-#         # Filter recommended products
-#         recommended_products = Product.objects.filter(id__in=recommended_ids)
-
-#         serializer = ProductRecommendationSerializer(
-#             recommended_products,
-#             many=True,
-#             context={"request": request}
+#         serializer = RecommendationResponseSerializer(
+#             {
+#                 'id': str(user.id),
+#                 'user_profile': user,
+#                 'products': products,
+#                 'category': categories
+#             },
+#             context={'request': request}
 #         )
 
 #         return APIResponse.success(
 #             message="Recommendations fetched successfully",
 #             data={
-#                 "ai_response": ai_result,
-#                 "recommended_products": serializer.data
+#                 "user_data": serializer.data,
+#                 "ai_recommendations": ai_result
 #             }
 #         )
+
+
+
+
+from django.db.models import Q, ExpressionWrapper
+
+from Products.models import Order, Product, ProductCategory
+from Products.ai_helper_function import send_to_ai_recommendation, filter_products_queryset
+
+
+class ProductRecommendationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        category_filter = request.data.get("category")
+        search_filter = request.data.get("search")
+
+        categories = ProductCategory.objects.all().order_by("name")
+        products = Product.objects.select_related("category").all().order_by("-id")
+
+        # optional local filtering before sending to AI
+        filtered_products = filter_products_queryset(
+            products=products,
+            category_value=category_filter,
+            search_value=search_filter
+        )
+
+        ai_result = send_to_ai_recommendation(
+            user_profile=user,
+            categories=categories,
+            products=filtered_products,
+            api_key=request.headers.get("X-API-KEY"),
+            request=request
+        )
+
+        if "error" in ai_result:
+            return APIResponse.error(
+                message=ai_result["error"],
+                status_code=400
+            )
+
+        # serialize sent payload preview
+        payload_serializer = RecommendationPayloadSerializer(
+            {
+                "user_id": str(user.id),
+                "user_profile": {
+                    "skin_tone": getattr(user, "skin_tone", ""),
+                    "undertone": getattr(user, "undertone", ""),
+                    "face_shape": getattr(user, "face_shape", ""),
+                    "eye_color": getattr(user, "eye_color", ""),
+                    "confidence_score": getattr(user, "confidence_score", 0),
+                    "summary": getattr(user, "summary", ""),
+                },
+                "categories": categories,
+                "products": filtered_products,
+            },
+            context={"request": request}
+        )
+
+        # optional: AI response থেকে matched product বা product names দিয়ে DB filter
+        matched_product_ids = []
+        matched_product_names = []
+
+        best_match_id = ai_result.get("best_match_id")
+        if best_match_id:
+            matched_product_ids.append(best_match_id)
+
+        matched_product = ai_result.get("matched_product", {})
+        if matched_product:
+            if matched_product.get("id"):
+                matched_product_ids.append(matched_product.get("id"))
+            if matched_product.get("name"):
+                matched_product_names.append(matched_product.get("name"))
+
+        recommended_products = Product.objects.none()
+
+        if matched_product_ids:
+            recommended_products = Product.objects.filter(id__in=matched_product_ids)
+
+        elif matched_product_names:
+            query = Q()
+            for product_name in matched_product_names:
+                query |= Q(name__icontains=product_name)
+            recommended_products = Product.objects.filter(query)
+
+        # apply same filters again if needed
+        recommended_products = filter_products_queryset(
+            products=recommended_products,
+            category_value=category_filter,
+            search_value=search_filter
+        ).select_related("category").distinct()
+
+        recommended_products_serializer = ProductRecommendationSerializer(
+            recommended_products,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Recommendations fetched successfully",
+            data={
+                "sent_payload": payload_serializer.data,
+                "ai_response": ai_result,
+                "recommended_products": recommended_products_serializer.data
+            },
+            status_code=200
+        )
+
+
+
+
+
+
+
+#admin dashboard view for superuser to get insights about the platform like total users, total revenue, total videos, total views and top creators etc
+
+from django.db.models import Sum, Count
+from django.db.models.functions import TruncMonth
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+
+from UserAuthentication.models import User
+from Products.models import Order
+from UserProfile.models import Video, VideoView,Commission
+from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper
+from datetime import datetime
+class AdminDashboardAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Top cards
+        total_revenue = Order.objects.filter(status='paid').aggregate(
+            total=Sum('total_amount')
+        )['total'] or 0
+
+        # total_users = User.objects.count()
+        total_users = User.objects.filter(is_superuser=False).count()
+
+        total_views = VideoView.objects.count()
+
+        videos_posted = Video.objects.count()
+
+        # Revenue trend by month
+        revenue_trend = (
+            Order.objects.filter(status='paid')
+            .annotate(month=TruncMonth('created_at'))
+            .values('month')
+            .annotate(total=Sum('total_amount'))
+            .order_by('month')
+        )
+
+        revenue_dict = {
+            item["month"].month: float(item["total"] or 0)
+            for item in revenue_trend
+        }
+        revenue_chart = []
+        for month in range(1, 13):
+            revenue_chart.append({
+                "month": datetime(2026, month, 1).strftime("%b"),
+                "total": revenue_dict.get(month, 0)
+            })
+
+        user_growth = (
+        User.objects.filter(is_superuser=False)
+        .annotate(month=TruncMonth('created_at'))
+        .values('month')
+        .annotate(total=Count('id'))
+        .order_by('month')
+    )
+
+        # Query result dictionary
+        user_dict = {
+            item["month"].month: item["total"]
+            for item in user_growth
+        }
+
+        user_chart = []
+
+        # Generate all 12 months
+        for month in range(1, 13):
+            user_chart.append({
+                "month": datetime(2026, month, 1).strftime("%b"),
+                "total": user_dict.get(month, 0)
+            })
+
+        # Top creators table
+        top_creators = (
+            User.objects.filter(creator=True)
+            .annotate(
+                total_videos=Count('product_videos_user', distinct=True),
+                total_sales=Sum(
+                ExpressionWrapper(
+                    F('product_videos_user__product__orderitem__price') *
+                    F('product_videos_user__product__orderitem__quantity'),
+                    output_field=DecimalField(max_digits=12, decimal_places=2)
+                )
+            ),
+                total_commission=Sum('commissions__commission_amount')
+            )
+            .order_by('-total_commission')[:5]
+        )
+
+        creators_data = []
+        for creator in top_creators:
+            creators_data.append({
+                "id": str(creator.id),
+                "name": creator.full_name,
+                "email": creator.email,
+                "videos": creator.total_videos or 0,
+                "sales": float(creator.total_sales or 0),
+                "commission": float(creator.total_commission or 0),
+            })
+
+        return Response({
+            "cards": {
+                "monthly_revenue": float(total_revenue),
+                "total_users": total_users,
+                "total_views": total_views,
+                "videos_posted": videos_posted,
+            },
+            "revenue_trend": revenue_chart,
+            "user_growth": user_chart,
+            "top_creators": creators_data
+        })
+        
+        
+        
+from Products.pagination import CustomPagination
+from.serializers import UserListSerializer
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+
+
+class UserAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request, user_id=None):
+
+        # USER DETAILS
+        if user_id:
+            user = get_object_or_404(
+                User.objects.filter(is_superuser=False).prefetch_related(
+                    "orders__items__product"
+                ),
+                id=user_id
+            )
+
+            serializer = UserDetailSerializer(
+                user,
+                context={"request": request}
+            )
+
+            return APIResponse.success(
+                message="User details retrieved successfully",
+                data=serializer.data
+            )
+
+        # USER LIST
+        search = request.query_params.get("search")
+
+        users = User.objects.filter(is_superuser=False,creator=False)
+
+        if search:
+            users = users.filter(
+                Q(full_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(users, request)
+
+        serializer = UserListSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response(serializer.data)

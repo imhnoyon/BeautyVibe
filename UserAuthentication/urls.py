@@ -16,5 +16,17 @@ urlpatterns = [
     
     # Product recommendation endpoint by AI
     path('set-image-image/', GetProfileImageView.as_view(), name='set-image'),
-    path('recommendations/', ProductRecommendationView.as_view(), name='product-recommendations'),
+    # path('recommendations/', ProductRecommendationView.as_view(), name='product-recommendations'),
+    path("recommendations/", ProductRecommendationView.as_view(), name="product-recommendations"),
+    
+    
+    
+    #admin dashboard
+    path('admin/dashboard/', AdminDashboardAPIView.as_view(), name='admin-dashboard'),
+    path("users/", UserAPIView.as_view()),
+    path("users/<uuid:user_id>/", UserAPIView.as_view()),
+    
+    
+    
+    
 ]

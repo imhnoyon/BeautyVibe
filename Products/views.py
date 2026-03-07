@@ -1,4 +1,7 @@
+from itertools import product
+
 from django.shortcuts import render
+from UserProfile.models import Commission, Video
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
@@ -133,12 +136,16 @@ class ProductDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
+        video_id = request.query_params.get("video_id")
         product = get_object_or_404(Product, pk=pk)
         serializer = ProductSerializer(product, context={'request': request})
         
         return APIResponse.success(
-            message="Product detail retrieved successfully",
-            data=serializer.data
+            message="Product details retrieved successfully",
+            data={
+                "video_id": video_id,
+                "product": serializer.data,
+            }
         )
 
 #save product view for user to save products to their profile
@@ -353,7 +360,7 @@ class CheckoutView(APIView):
         user = request.user
         cart = get_object_or_404(Cart, user=user)
         cart_items = cart.cart_items.all()
-        
+        video_id = request.data.get("video_id")
         if not cart_items.exists():
             return APIResponse.error(message="Your cart is empty")
 
@@ -388,7 +395,20 @@ class CheckoutView(APIView):
                     quantity=item.quantity,
                     price=item.product.price
                 )
-            
+                
+            # Handle commission for video if video_id is provided
+            if video_id:
+                video = Video.objects.filter(id=video_id, product=product).first()
+                if video:
+                    commission_amount = (product.price * product.quantity) * 0.10
+
+                    Commission.objects.create(
+                        creator=video.user,   
+                        video=video,
+                        order_amount=product.price * product.quantity,
+                        commission_amount=commission_amount
+                    )
+
             # IMPORTANT: Do NOT clear cart yet if we want user to pay immediately?
             # Actually, clearing it is fine because Order has the items now.
             cart_items.delete()
@@ -600,3 +620,24 @@ class ProductCategoryView(APIView):
             message="Category deleted successfully",
             status_code=204
         )
+        
+        
+
+# # Products details view for explore from video 
+# class ProductDetailAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request, product_id):
+#         video_id = request.query_params.get("video_id")
+
+#         product = get_object_or_404(Product, id=product_id)
+
+#         serializer = ProductSerializer(product, context={"request": request})
+
+#         return APIResponse.success(
+#             message="Product details retrieved successfully",
+#             data={
+#                 "product": serializer.data,
+#                 "video_id": video_id
+#             }
+#         )
