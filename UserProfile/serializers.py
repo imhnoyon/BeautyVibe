@@ -1,7 +1,9 @@
 from rest_framework import serializers
-from .models import ProductReview, Video, VideoView
+from .models import LikedVideo, PrivacyPolicy, ProductReview, SavedVideo, SharedVideo, Video, VideoView
 from Products.models import Order, OrderItem, Product, ProductCategory
 from Products.serializers import ProductSerializer, productviewcartserializer
+
+
 
 class ProductCategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,7 +21,7 @@ class ProductVideoSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     class Meta:
         model = Video
-        fields = ["id", "product", "video_url", "created_at"]
+        fields = ["id", "product", "video_url",'like_count', 'share_count','saved_video',"created_at"]
         
 #serializer for video upload and count view with product details
 class VideoViewSerializer(serializers.ModelSerializer):
@@ -61,3 +63,146 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ["id", "status", "total_amount",  "delivery_method" 
                   , "created_at", "is_paid", "items"]
         read_only_fields = ["id", "status", "total_amount", "created_at", "is_paid"]
+        
+        
+        
+        
+# commssion tracking serializer for creator to track their commission from product sales
+
+class CommissionTrackingSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    creator = serializers.CharField()
+    date = serializers.CharField()
+    total_sales = serializers.DecimalField(max_digits=12, decimal_places=2)
+    commission = serializers.DecimalField(max_digits=12, decimal_places=2)
+    progress = serializers.CharField()
+    
+    
+    
+    
+#serializer for admin added new policy for creator dashboard to show the policy details
+class PrivacyPolicySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PrivacyPolicy
+        fields = [
+            "id",
+            "title",
+            "description",
+            "created_at"
+        ]
+        
+        
+        
+# saved Unsaved viddeo serializer for user
+class VideoListSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    creator_name = serializers.CharField(source="user.full_name", read_only=True)
+    is_saved = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Video
+        fields = [
+            "id",
+            "video_url",
+            "caption",
+            "product_type",
+            "shade",
+            "product_name",
+            "creator_name",
+            "like_count",
+            "share_count",
+            "saved_video",
+            "is_saved",
+            "created_at",
+        ]
+
+    def get_is_saved(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return SavedVideo.objects.filter(user=request.user, video=obj).exists()
+        return False
+        
+        
+        
+        
+class VideoListSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    creator_name = serializers.CharField(source="user.full_name", read_only=True)
+    is_saved = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Video
+        fields = [
+            "id",
+            "video_url",
+            "caption",
+            "product_type",
+            "shade",
+            "product_name",
+            "creator_name",
+            "like_count",
+            "share_count",
+            "saved_video",
+            "is_saved",
+            "is_liked",
+            "created_at",
+        ]
+
+    def get_is_saved(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return SavedVideo.objects.filter(user=request.user, video=obj).exists()
+        return False
+
+    def get_is_liked(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return LikedVideo.objects.filter(user=request.user, video=obj).exists()
+        return False
+        
+        
+        
+# Share video serializers for user to share the video with other user and also show the shared video list to userclass VideoListSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    creator_name = serializers.CharField(source="user.full_name", read_only=True)
+    is_saved = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+    is_shared = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Video
+        fields = [
+            "id",
+            "video_url",
+            "caption",
+            "product_type",
+            "shade",
+            "product_name",
+            "creator_name",
+            "like_count",
+            "share_count",
+            "saved_video",
+            "is_saved",
+            "is_liked",
+            "is_shared",
+            "created_at",
+        ]
+
+    def get_is_saved(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return SavedVideo.objects.filter(user=request.user, video=obj).exists()
+        return False
+
+    def get_is_liked(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return LikedVideo.objects.filter(user=request.user, video=obj).exists()
+        return False
+
+    def get_is_shared(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return SharedVideo.objects.filter(user=request.user, video=obj).exists()
+        return False

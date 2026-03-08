@@ -235,3 +235,18 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         model = ProductCategory
         fields = ["id", "name", "slug", "created_at", "updated_at"]
         read_only_fields = ["id", "slug", "created_at", "updated_at"]
+        
+        
+        
+        
+#admin deshboard serializer 
+class OrderListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'user', 'full_name', 'mobile_number', 'emirate', 
+            'area', 'building_name', 'apartment_no', 'landmark', 
+            'delivery_method', 'delivery_charge', 'delivery_note', 
+            'total_amount','number_of_items', 'status', 'created_at'
+        ]
+        read_only_fields = ['id', 'user', 'total_amount', 'status', 'created_at']

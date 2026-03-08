@@ -29,6 +29,11 @@ urlpatterns = [
     path("users-creators/<uuid:user_id>/", CreatorDetailAPIView.as_view(), name="creator-detail"),
     
     
+    # admin can see his profile and update his profile details
+    path("admin/profile/", AdminProfileAPIView.as_view(), name="admin-profile"),
+    path("change-password/", ChangePasswordAPIView.as_view(), name="change-password"),
+    
+    
     
     
 ]

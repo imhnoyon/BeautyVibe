@@ -46,6 +46,10 @@ class Commission(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def creator_name(self):
+        if self.creator:
+            return self.creator.full_name
+        return None
     class Meta:
         ordering = ["-created_at"]
         indexes = [
@@ -72,3 +76,60 @@ class ProductReview(models.Model):
 
     def __str__(self):
         return f"{self.product.name} - {self.user.full_name} ({self.rating})"
+    
+    
+    
+    
+    
+class PrivacyPolicy(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+    
+    
+    
+class SavedVideo(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="saved_videos")
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="saved_by_users")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "video")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.full_name} saved Video {self.video.id}"
+    
+    
+    
+    
+class LikedVideo(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="liked_videos")
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="liked_by_users")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "video")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.full_name} liked Video {self.video.id}"
+    
+    
+    
+    
+class SharedVideo(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="shared_videos")
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="shared_by_users")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.full_name} shared Video {self.video.id}"

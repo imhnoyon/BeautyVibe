@@ -3,7 +3,7 @@ from itertools import product
 from django.shortcuts import render
 from UserProfile.models import Commission, Video
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from rest_framework import status
 from .serializers import *
 from .models import *
@@ -25,6 +25,7 @@ class ProductCreateView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     paginator_class =CustomPagination
+    
     def post(self, request, *args, **kwargs):
         serializer = ProductSerializer(
             data=request.data,
@@ -43,8 +44,42 @@ class ProductCreateView(APIView):
             status_code=status.HTTP_400_BAD_REQUEST
         )
         
+        
     # 🔹 LIST ALL PRODUCTS OR RETRIEVE SINGLE PRODUCT
+    # def get(self, request, pk=None, *args, **kwargs):
+    #     if pk:
+    #         product = get_object_or_404(Product, pk=pk)
+    #         serializer = ProductSerializer(product, context={'request': request})
+    #         return APIResponse.success(
+    #             message="Product retrieved successfully",
+    #             data=serializer.data
+    #         )
+        
+    #     products = Product.objects.all()
+        
+    #     # ✅ Apply Pagination
+    #     paginator = self.paginator_class()
+    #     paginated_products = paginator.paginate_queryset(products, request)
+    #     serializer = ProductSerializer(paginated_products, many=True, context={'request': request})
+        
+    #     return APIResponse.success(
+    #         message="Product list retrieved successfully",
+    #         data={
+    #             "total": products.count(),
+    #             "page": paginator.page.number,
+    #             "total_pages": paginator.page.paginator.num_pages,
+    #             "next": paginator.get_next_link(),
+    #             "previous": paginator.get_previous_link(),
+    #             "products": serializer.data
+    #         }
+    #     )
+    
+    
     def get(self, request, pk=None, *args, **kwargs):
+        status = request.query_params.get("status")
+        search = request.query_params.get("search")
+        category = request.query_params.get("category")
+
         if pk:
             product = get_object_or_404(Product, pk=pk)
             serializer = ProductSerializer(product, context={'request': request})
@@ -52,14 +87,34 @@ class ProductCreateView(APIView):
                 message="Product retrieved successfully",
                 data=serializer.data
             )
-        
+
         products = Product.objects.all()
-        
-        # ✅ Apply Pagination
+
+        # search filter
+        if search:
+            products = products.filter(
+                Q(name__icontains=search) |
+                Q(brand__icontains=search) |
+                Q(shade__icontains=search) |
+                Q(category__name__icontains=search)
+            )
+
+        # category filter
+        if category:
+             products = products.filter(category__name__icontains=category)
+
+        # যদি status field থাকে তাহলে এটা রাখো, না থাকলে remove করো
+        if status:
+            products = products.filter(status=status)
+
         paginator = self.paginator_class()
         paginated_products = paginator.paginate_queryset(products, request)
-        serializer = ProductSerializer(paginated_products, many=True, context={'request': request})
-        
+        serializer = ProductSerializer(
+            paginated_products,
+            many=True,
+            context={'request': request}
+        )
+
         return APIResponse.success(
             message="Product list retrieved successfully",
             data={
@@ -70,6 +125,30 @@ class ProductCreateView(APIView):
                 "previous": paginator.get_previous_link(),
                 "products": serializer.data
             }
+        )
+        
+    
+    def put(self, request, pk, *args, **kwargs):
+        product = get_object_or_404(Product, pk=pk)
+
+        serializer = ProductSerializer(
+            product,
+            data=request.data,
+            partial=True,  
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Product updated successfully",
+                data=serializer.data
+            )
+
+        return APIResponse.error(
+            message="Failed to update product",
+            errors=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
         )
         
     # 🔹 DELETE PRODUCT
@@ -562,7 +641,7 @@ def stripe_webhook(request):
 
 # Category list and create category view for admin
 class ProductCategoryView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsAdminUser]
     paginator_class = CustomPagination
     
     def get(self, request):
@@ -661,3 +740,73 @@ class ProductCategoryView(APIView):
 #                 "video_id": video_id
 #             }
 #         )
+
+
+
+
+class OrderListAPIView(APIView):
+    permission_classes = [IsAuthenticated,IsAdminUser]
+    pagination_class = CustomPagination
+
+    def get(self, request, pk=None):
+        if pk:
+            order = get_object_or_404(
+                Order.objects.prefetch_related("items"),
+                pk=pk
+            )
+            serializer = OrderListSerializer(order, context={"request": request})
+            return APIResponse.success(
+                message="Order retrieved successfully",
+                data=serializer.data
+            )
+
+        search = request.query_params.get("search")
+        status_filter = request.query_params.get("status")
+
+        orders = Order.objects.prefetch_related("items").all().order_by("-created_at")
+
+        if search:
+            orders = orders.filter(
+                Q(full_name__icontains=search) |
+                Q(mobile_number__icontains=search) |
+                Q(id__icontains=search)
+            )
+
+        if status_filter:
+            orders = orders.filter(status=status_filter)
+
+        paginator = self.pagination_class()
+        paginated_orders = paginator.paginate_queryset(orders, request)
+        serializer = OrderListSerializer(
+            paginated_orders,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Order list retrieved successfully",
+            data={
+                "total": orders.count(),
+                "page": paginator.page.number,
+                "total_pages": paginator.page.paginator.num_pages,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "orders": serializer.data
+            }
+        )
+        
+    def delete(self, request, pk=None):
+        if not pk:
+            return APIResponse.error(
+                message="Order id is required",
+                status_code=400
+            )
+
+        order = get_object_or_404(Order, pk=pk)
+        order.delete()
+
+        return APIResponse.success(
+            message="Order deleted successfully",
+            data=None,
+            status_code=200
+        )

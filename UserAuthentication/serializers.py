@@ -2,6 +2,13 @@ from Products.models import Order, OrderItem, Product
 from UserProfile.models import Video, VideoView
 from rest_framework import serializers
 from .models import User  
+from django.contrib.auth.password_validation import validate_password
+from Products.models import Product, ProductCategory
+from django.db.models import Sum
+from datetime import timedelta
+from django.utils import timezone
+from django.db.models import  DecimalField
+
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
@@ -55,9 +62,6 @@ class ProductRecommendationSerializer(serializers.ModelSerializer):
         
         
         
-from rest_framework import serializers
-from Products.models import Product, ProductCategory
-
 
 class AIUserProfileSerializer(serializers.Serializer):
     skin_tone = serializers.CharField(allow_blank=True, required=False)
@@ -215,9 +219,6 @@ class OrderSerializer(serializers.ModelSerializer):
         
         
         
-from django.db.models import Sum
-from datetime import timedelta
-from django.utils import timezone
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -292,7 +293,7 @@ class UserListSerializer(serializers.ModelSerializer):
         
         
 #admin deshboard serializer for creator detail with total views, total videos, total earning and total orders      
-from django.db.models import  DecimalField
+
 class VideoSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_image = serializers.SerializerMethodField()
@@ -354,3 +355,29 @@ class CreatorDetailSerializer(serializers.ModelSerializer):
     def get_videos(self, obj):
         videos = Video.objects.filter(user=obj).order_by("-created_at")
         return VideoSerializer(videos, many=True, context=self.context).data
+    
+    
+    
+    
+class AdminUpdateprodileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["full_name", "email", "profile_picture", "phone_number", "address", "created_at"]
+        
+        
+        
+#password change serializer for admin
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
+    confirm_password = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                {"confirm_password": "New password and confirm password must match"}
+            )
+
+        validate_password(attrs["new_password"])
+
+        return attrs

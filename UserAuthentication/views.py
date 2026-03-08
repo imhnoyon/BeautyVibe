@@ -2,11 +2,10 @@ import datetime
 
 from django.shortcuts import render
 from rest_framework.generics import CreateAPIView
-from rest_framework.permissions import AllowAny,IsAuthenticated
+from rest_framework.permissions import AllowAny,IsAuthenticated,IsAdminUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from utils.api_response import APIResponse
-from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from .emails import *
 from .serializers import *
@@ -15,8 +14,22 @@ from .models import *
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from django.conf import settings
-from rest_framework.response import Response
 from django.utils import timezone
+from Products.models import Order, Product, ProductCategory
+from Products.ai_helper_function import send_to_ai_recommendation, filter_products_queryset
+from django.db.models.functions import TruncMonth
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from UserAuthentication.models import User
+from Products.models import Order
+from UserProfile.models import Video, VideoView,Commission
+from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper,Value,Q, ExpressionWrapper
+from datetime import datetime
+from Products.pagination import CustomPagination
+from.serializers import UserListSerializer
+from django.shortcuts import get_object_or_404
+from django.db.models.functions import Coalesce   
+
 
 # signup view for create a user .
 class SignupView(CreateAPIView):
@@ -88,9 +101,6 @@ class SignInView(APIView):
                
             }
         )
-        
-        
-        
         
 #--------Resend OTP for email verification and password reset ---------#
 class ResendVerificationCodeView(APIView):
@@ -385,10 +395,6 @@ class GetProfileImageView(APIView):
 
 
 
-from django.db.models import Q, ExpressionWrapper
-
-from Products.models import Order, Product, ProductCategory
-from Products.ai_helper_function import send_to_ai_recommendation, filter_products_queryset
 
 
 class ProductRecommendationView(APIView):
@@ -499,20 +505,9 @@ class ProductRecommendationView(APIView):
 
 #admin dashboard view for superuser to get insights about the platform like total users, total revenue, total videos, total views and top creators etc
 
-from django.db.models import Sum, Count
-from django.db.models.functions import TruncMonth
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 
-
-from UserAuthentication.models import User
-from Products.models import Order
-from UserProfile.models import Video, VideoView,Commission
-from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper
-from datetime import datetime
 class AdminDashboardAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsAdminUser]
 
     def get(self, request):
         # Top cards
@@ -612,16 +607,11 @@ class AdminDashboardAPIView(APIView):
         
         
         
-from Products.pagination import CustomPagination
-from.serializers import UserListSerializer
-from django.db.models import Q
-from django.shortcuts import get_object_or_404
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+
 
 
 class UserAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     pagination_class = CustomPagination
 
     def get(self, request, user_id=None):
@@ -672,7 +662,7 @@ class UserAPIView(APIView):
     
 # user creator details view   
 class UsercreatorAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsAdminUser]
     pagination_class = CustomPagination
 
     def get(self, request, user_id=None):
@@ -720,8 +710,7 @@ class UsercreatorAPIView(APIView):
     
     
     
-from django.db.models.functions import Coalesce   
-from django.db.models import DecimalField, Value
+
 
 class CreatorDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -748,4 +737,73 @@ class CreatorDetailAPIView(APIView):
             message="Creator details retrieved successfully",
             data=serializer.data,
             status_code=200
+        )
+        
+        
+        
+#admin profile can see and update his profile
+class AdminProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        serializer = AdminUpdateprodileSerializer(
+            request.user,
+            context={"request": request}
+        )
+        return APIResponse.success(
+            message="Profile retrieved successfully",
+            data=serializer.data
+        )
+
+    def put(self, request):
+        serializer = AdminUpdateprodileSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={"request": request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return APIResponse.success(
+                message="Profile updated successfully",
+                data=serializer.data
+            )
+
+        return APIResponse.error(
+            message="Failed to update profile",
+            errors=serializer.errors,
+            status_code=400
+        )
+        
+        
+        
+class ChangePasswordAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+
+        if serializer.is_valid():
+            user = request.user
+
+            old_password = serializer.validated_data["old_password"]
+            new_password = serializer.validated_data["new_password"]
+
+            if not user.check_password(old_password):
+                return APIResponse.error(
+                    message="Old password is incorrect",
+                    status_code=400
+                )
+
+            user.set_password(new_password)
+            user.save()
+
+            return APIResponse.success(
+                message="Password changed successfully"
+            )
+
+        return APIResponse.error(
+            message="Failed to change password",
+            errors=serializer.errors
         )

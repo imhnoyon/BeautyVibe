@@ -14,5 +14,32 @@ urlpatterns = [
      # product reviews
     path("reviews/<int:product_id>/", ProductReviewView.as_view(), name="product-reviews"),
     
-    path("orders/history/", OrderHistoryView.as_view(), name="order-history")
+    path("orders/history/", OrderHistoryView.as_view(), name="order-history"),
+    
+    
+    
+    #commission tracking for creator
+    path("commissions/", CommissionTrackingAPIView.as_view(), name="commission-list"),
+    path("commissions/<int:pk>/", CommissionTrackingAPIView.as_view(), name="commission-detail"),
+    
+    
+    # added privacy policy view for user to see the privacy policy of the app
+    path("policies/", PrivacyPolicyAPIView.as_view()),
+    path("policies/<int:pk>/", PrivacyPolicyAPIView.as_view()),
+    
+    
+    #saved video view for user to see the saved video and also remove the saved video from the list
+    path("videos/save/<int:video_id>/", SaveUnsaveVideoAPIView.as_view(), name="save-unsave-video"),
+    path("videos/saved/", SavedVideoListAPIView.as_view(), name="saved-video-list"),
+    
+    
+    # liked video view for user to see the liked video and also remove the liked video from the list
+    path("videos/like/<int:video_id>/", LikeUnlikeVideoAPIView.as_view(), name="like-unlike-video"),
+    path("videos/liked/", LikedVideoListAPIView.as_view(), name="liked-video-list"),
+    
+    
+    # shared video view for user to see the shared video and also remove the shared video from the list
+    path("videos/share/<int:video_id>/", ShareVideoAPIView.as_view(), name="share-video"),
+    path("videos/shared/", SharedVideoListAPIView.as_view(), name="shared-video-list"),
+
 ]

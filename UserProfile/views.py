@@ -1,11 +1,15 @@
 from Products.models import Order, OrderItem
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
-from .models import Video
+from .models import *
 from .serializers import *
 from utils.api_response import APIResponse
+from django.db.models import Q, Sum, Max
+from django.shortcuts import get_object_or_404
+
+
 
 class ProductCategoryListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -42,7 +46,7 @@ class ProductByCategoryView(APIView):
         
 
 # For video upload related to product
-from django.shortcuts import get_object_or_404
+
 
 class ProductVideoUploadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -108,8 +112,7 @@ class VideoWatchView(APIView):
         )
         
 
-from django.db.models import Count, Sum
-from .models import Commission
+
 class CreatorDashboardView(APIView):
     """
     GET /creator/dashboard/
@@ -207,7 +210,7 @@ class ProductReviewView(APIView):
         
         
         
-        
+from permission_class import IsCreator
 class OrderHistoryView(APIView):
     permission_classes = [IsAuthenticated]
     paginator_class = CustomPagination
@@ -224,3 +227,370 @@ class OrderHistoryView(APIView):
             "message": "Order history fetched successfully",
             "orders": serializer.data
         })
+        
+
+class CommissionTrackingAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get("search")
+
+        commissions = Commission.objects.select_related("creator", "video").all()
+
+        if search:
+            commissions = commissions.filter(
+                Q(creator__full_name__icontains=search) |
+                Q(creator__email__icontains=search)
+            )
+
+        grouped_commissions = (
+            commissions
+            .values("creator", "creator__full_name")
+            .annotate(
+                total_sales=Sum("order_amount"),
+                commission=Sum("commission_amount"),
+                last_date=Max("created_at")
+            )
+            .order_by("-last_date")
+        )
+
+        commission_data = [
+            {
+                "creator": item["creator__full_name"],
+                "date": item["last_date"].strftime("%b %d, %Y") if item["last_date"] else None,
+                "total_sales": item["total_sales"] or 0,
+                "commission": item["commission"] or 0,
+                "progress": "Paid" if (item["commission"] or 0) > 0 else "Pending",
+            }
+            for item in grouped_commissions
+        ]
+
+        # Top cards summary
+        pending_payouts = 0
+        paid_payouts = 0
+
+        for item in commission_data:
+            if item["progress"] == "Paid":
+                paid_payouts += item["commission"]
+            else:
+                pending_payouts += item["commission"]
+
+        paginator = self.pagination_class()
+        paginated_data = paginator.paginate_queryset(commission_data, request)
+
+        serializer = CommissionTrackingSerializer(paginated_data, many=True)
+
+        return APIResponse.success(
+            message="Commission tracking retrieved successfully",
+            data={
+                "summary": {
+                    "pending_payouts": pending_payouts,
+                    "paid_payouts": paid_payouts,
+                },
+                "table": {
+                    "total": len(commission_data),
+                    "page": paginator.page.number,
+                    "total_pages": paginator.page.paginator.num_pages,
+                    "next": paginator.get_next_link(),
+                    "previous": paginator.get_previous_link(),
+                    "commissions": serializer.data
+                }
+            }
+        )
+        
+        
+        
+
+# admin can add new policy for creator 
+class PrivacyPolicyAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, pk=None):
+        if pk:
+            policy = get_object_or_404(PrivacyPolicy, id=pk)
+            serializer = PrivacyPolicySerializer(policy)
+            return APIResponse.success(
+                message="Policy retrieved successfully",
+                data=serializer.data
+            )
+
+        policies = PrivacyPolicy.objects.all().order_by("-created_at")
+        serializer = PrivacyPolicySerializer(policies, many=True)
+
+        return APIResponse.success(
+            message="Policy list retrieved successfully",
+            data=serializer.data
+        )
+
+    def post(self, request):
+        serializer = PrivacyPolicySerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return APIResponse.success(
+                message="Policy created successfully",
+                data=serializer.data,
+                status_code=201
+            )
+
+        return APIResponse.error(
+            message="Failed to create policy",
+            errors=serializer.errors
+        )
+
+    def put(self, request, pk):
+        policy = get_object_or_404(PrivacyPolicy, id=pk)
+
+        serializer = PrivacyPolicySerializer(
+            policy,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return APIResponse.success(
+                message="Policy updated successfully",
+                data=serializer.data
+            )
+
+        return APIResponse.error(
+            message="Failed to update policy",
+            errors=serializer.errors
+        )
+
+    def delete(self, request, pk):
+        policy = get_object_or_404(PrivacyPolicy, id=pk)
+        policy.delete()
+
+        return APIResponse.success(
+            message="Policy deleted successfully"
+        )
+        
+        
+        
+# view to show saved videos for user
+
+class SaveUnsaveVideoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, video_id):
+        video = get_object_or_404(Video, id=video_id)
+
+        saved_obj = SavedVideo.objects.filter(user=request.user, video=video).first()
+
+        if saved_obj:
+            saved_obj.delete()
+
+            if video.saved_video > 0:
+                video.saved_video -= 1
+                video.save(update_fields=["saved_video"])
+
+            return APIResponse.success(
+                message="Video unsaved successfully",
+                data={
+                    "video_id": video.id,
+                    "is_saved": False,
+                    "saved_count": video.saved_video
+                }
+            )
+
+        SavedVideo.objects.create(user=request.user, video=video)
+        video.saved_video += 1
+        video.save(update_fields=["saved_video"])
+
+        return APIResponse.success(
+            message="Video saved successfully",
+            data={
+                "video_id": video.id,
+                "is_saved": True,
+                "saved_count": video.saved_video
+            }
+        )
+        
+        
+        
+# saved videos list for user
+class SavedVideoListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        saved_videos = SavedVideo.objects.filter(
+            user=request.user
+        ).select_related(
+            "video__product",
+            "video__user"
+        ).order_by("-created_at")
+
+        videos = [item.video for item in saved_videos]
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(videos, request)
+
+        serializer = VideoListSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Saved video list retrieved successfully",
+            data={
+                "total": saved_videos.count(),
+                "page": paginator.page.number,
+                "total_pages": paginator.page.paginator.num_pages,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "videos": serializer.data
+            }
+        )
+        
+        
+        
+        
+# Video like unlike view for user to like and unlike the video
+class LikeUnlikeVideoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, video_id):
+        video = get_object_or_404(Video, id=video_id)
+
+        liked_obj = LikedVideo.objects.filter(user=request.user, video=video).first()
+
+        if liked_obj:
+            liked_obj.delete()
+
+            if video.like_count > 0:
+                video.like_count -= 1
+                video.save(update_fields=["like_count"])
+
+            return APIResponse.success(
+                message="Video unliked successfully",
+                data={
+                    "video_id": video.id,
+                    "is_liked": False,
+                    "like_count": video.like_count
+                }
+            )
+
+        LikedVideo.objects.create(user=request.user, video=video)
+        video.like_count += 1
+        video.save(update_fields=["like_count"])
+
+        return APIResponse.success(
+            message="Video liked successfully",
+            data={
+                "video_id": video.id,
+                "is_liked": True,
+                "like_count": video.like_count
+            }
+        )
+        
+        
+        
+# Liked videos list for user to see the liked videos and also remove the liked video from the list     
+class LikedVideoListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        liked_videos = LikedVideo.objects.filter(
+            user=request.user
+        ).select_related(
+            "video__product",
+            "video__user"
+        ).order_by("-created_at")
+
+        videos = [item.video for item in liked_videos]
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(videos, request)
+
+        serializer = VideoListSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Liked video list retrieved successfully",
+            data={
+                "total": liked_videos.count(),
+                "page": paginator.page.number,
+                "total_pages": paginator.page.paginator.num_pages,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "videos": serializer.data
+            }
+        )
+        
+        
+# Share video view 
+class ShareVideoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, video_id):
+        video = get_object_or_404(Video, id=video_id)
+
+        SharedVideo.objects.create(
+            user=request.user,
+            video=video
+        )
+
+        video.share_count += 1
+        video.save(update_fields=["share_count"])
+
+        return APIResponse.success(
+            message="Video shared successfully",
+            data={
+                "video_id": video.id,
+                "share_count": video.share_count
+            }
+        )
+        
+        
+        
+class SharedVideoListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        shared_videos = SharedVideo.objects.filter(
+            user=request.user
+        ).select_related(
+            "video__product",
+            "video__user"
+        ).order_by("-created_at")
+
+        unique_videos = []
+        seen_video_ids = set()
+
+        for item in shared_videos:
+            if item.video_id not in seen_video_ids:
+                unique_videos.append(item.video)
+                seen_video_ids.add(item.video_id)
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(unique_videos, request)
+
+        serializer = VideoListSerializer(
+            page,
+            many=True,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Shared video list retrieved successfully",
+            data={
+                "total": len(unique_videos),
+                "page": paginator.page.number,
+                "total_pages": paginator.page.paginator.num_pages,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "videos": serializer.data
+            }
+        )

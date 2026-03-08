@@ -8,7 +8,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=150,null=True, blank=True)
-
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    
     profile_picture = models.ImageField(upload_to="User/Profile_picture",blank=True, null=True)
     creator = models.BooleanField(default=False,null=True, blank=True)
 

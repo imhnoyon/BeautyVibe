@@ -11,6 +11,10 @@ urlpatterns = [
     path('save-product/', SaveProductsView.as_view(), name='save-product'),
     path('delete-save-product/<int:pk>/', DeleteSaveProductsView.as_view(), name='delete-save-product'),
     
+    #orders urls
+    path("orders/", OrderListAPIView.as_view(), name="order-list"),
+    path("orders/<int:pk>/", OrderListAPIView.as_view(), name="order-detail"),
+    
     # Cart URLs
     path('cart/', CartView.as_view(), name='cart'),
     path('cart/item/<int:pk>/', CartItemUpdateDeleteView.as_view(), name='cart-item-detail'),

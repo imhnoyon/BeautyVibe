@@ -161,6 +161,9 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def number_of_items(self):
+        if hasattr(self, 'items'):
+            return self.items.count()
     def __str__(self):
         return f"Order {self.id} by {self.full_name}"
 
