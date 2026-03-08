@@ -717,3 +717,35 @@ class UsercreatorAPIView(APIView):
         )
 
         return paginator.get_paginated_response(serializer.data)
+    
+    
+    
+from django.db.models.functions import Coalesce   
+from django.db.models import DecimalField, Value
+
+class CreatorDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, user_id):
+        
+        creator = get_object_or_404(
+            User.objects.filter(is_superuser=False, creator=True)
+            .annotate(
+                total_videos=Count("product_videos_user", distinct=True),
+                total_views=Count("product_videos_user__views", distinct=True),
+                total_earning=Coalesce(Sum("commissions__commission_amount"), Value(0, output_field=DecimalField())),
+                total_orders=Count("commissions", distinct=True),
+            ),
+            id=user_id
+        )
+
+        serializer = CreatorDetailSerializer(
+            creator,
+            context={"request": request}
+        )
+
+        return APIResponse.success(
+            message="Creator details retrieved successfully",
+            data=serializer.data,
+            status_code=200
+        )

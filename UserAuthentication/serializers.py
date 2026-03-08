@@ -1,4 +1,5 @@
 from Products.models import Order, OrderItem, Product
+from UserProfile.models import Video, VideoView
 from rest_framework import serializers
 from .models import User  
 
@@ -288,3 +289,68 @@ class UserListSerializer(serializers.ModelSerializer):
             "profile_picture",
             "created_at"
         ]
+        
+        
+#admin deshboard serializer for creator detail with total views, total videos, total earning and total orders      
+from django.db.models import  DecimalField
+class VideoSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_image = serializers.SerializerMethodField()
+    class Meta:
+        model = Video
+        fields = [
+            "id",
+            "video_url",
+            "product_name",
+            "product_image",
+            "created_at"
+        ]
+        
+    def get_product_image(self, obj):
+        request = self.context.get("request")
+        if obj.product and obj.product.image:
+            if request:
+                return request.build_absolute_uri(obj.product.image.url)
+            return obj.product.image.url
+        return None
+
+class CreatorDetailSerializer(serializers.ModelSerializer):
+    total_views = serializers.SerializerMethodField()
+    total_videos = serializers.SerializerMethodField()
+    total_earning = serializers.SerializerMethodField()
+    total_orders = serializers.SerializerMethodField()
+    videos = serializers.SerializerMethodField()
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "full_name",
+            "email",
+            "profile_picture",
+            "created_at",
+            "total_views",
+            "total_videos",
+            "total_earning",
+            "total_orders",
+             "videos"
+        ]
+
+    def get_total_views(self, obj):
+        return VideoView.objects.filter(video__user=obj).count()
+
+    def get_total_videos(self, obj):
+        return Video.objects.filter(user=obj).count()
+
+    def get_total_earning(self, obj):
+        total = obj.commissions.aggregate(
+            total=Sum("commission_amount")
+        )["total"] or 0
+        return float(total)
+
+    def get_total_orders(self, obj):
+        return obj.commissions.count()
+    
+    
+    def get_videos(self, obj):
+        videos = Video.objects.filter(user=obj).order_by("-created_at")
+        return VideoSerializer(videos, many=True, context=self.context).data
