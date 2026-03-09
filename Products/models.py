@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.utils.text import slugify
 from BeautyVibe import settings
@@ -164,6 +166,9 @@ class Order(models.Model):
     def number_of_items(self):
         if hasattr(self, 'items'):
             return self.items.count()
+        
+   
+    
     def __str__(self):
         return f"Order {self.id} by {self.full_name}"
 
@@ -198,3 +203,46 @@ class OrderHistory(models.Model):
 
     def __str__(self):
         return f"Order {self.order.id} - {self.status}"
+    
+    
+    
+    
+    
+    
+    
+import uuid
+
+class PaymentHistory(models.Model):
+
+    TRANSACTION_METHODS = (
+        ('stripe', 'Stripe'),
+        ('google_pay', 'Google Pay'),
+        ('apple_pay', 'Apple Pay'),
+        ('card', 'Card'),
+    )
+
+    payment_id = models.CharField(max_length=20, unique=True, editable=False)
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="payment_histories")
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="payments")
+
+    transaction_method = models.CharField(max_length=50, choices=TRANSACTION_METHODS)
+
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    stripe_session_id = models.CharField(max_length=255, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.payment_id:
+            self.payment_id = f"PAY-{uuid.uuid4().hex[:4].upper()}"
+        super().save(*args, **kwargs)
+
+    def customer_name(self):
+        if self.user:
+            return self.user.full_name
+        return None
+
+    def __str__(self):
+        return f"{self.payment_id} - {self.user.full_name}"

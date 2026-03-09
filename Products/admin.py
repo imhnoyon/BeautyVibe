@@ -19,12 +19,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ('slug','brand' , 'category')
     ordering = ('created_at',)
 
-# @admin.register(SavedProduct)
-# class SavedProductAdmin(admin.ModelAdmin):
-#     list_display = ("user", "product", "saved_at")
-#     search_fields = ('user__username', 'product__name')
-#     list_filter = ('saved_at',)
-#     ordering = ('saved_at',)
+
     
 @admin.register(Cart)
 class CartAdmin(admin.ModelAdmin):
@@ -47,10 +42,12 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at')
     ordering = ('created_at',)
     
-# @admin.register(Video)
-# class VideoAdmin(admin.ModelAdmin):
-#     list_display = ("user", "product", "caption", "created_at")
-#     search_fields = ('user__username', 'product__name', 'caption')
-#     list_filter = ('created_at',)
-#     ordering = ('created_at',)
+
+    
+@admin.register(PaymentHistory)
+class PaymentHistoryAdmin(admin.ModelAdmin):
+    list_display = ("payment_id", "customer_name", "order", "transaction_method", "amount", "stripe_session_id", "created_at")
+    search_fields = ('payment_id', 'user__username', 'order__id')
+    list_filter = ('transaction_method', 'created_at')
+    ordering = ('created_at',)
     

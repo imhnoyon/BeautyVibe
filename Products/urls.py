@@ -26,6 +26,9 @@ urlpatterns = [
     path('create-checkout-session/', CreateCheckoutSessionView.as_view(), name='create-checkout-session'),
     path("stripe/webhook/", stripe_webhook, name="stripe-webhook"),
     
+    #payment history url for admin dashboard
+    path("payment-history/", PaymentHistoryView.as_view(), name="payment-history"),
+    
     
     path("payment-success/", StripePaymentSuccessView.as_view(), name="payment-success"),
     path("payment-cancel/", StripePaymentCancelView.as_view(), name="payment-cancel"),

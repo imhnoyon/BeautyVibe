@@ -3,7 +3,7 @@ from itertools import product
 from django.shortcuts import render
 from UserProfile.models import Commission, Video
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated,IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import status
 from .serializers import *
 from .models import *
@@ -17,6 +17,8 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from django.urls import reverse
+
+
 # Set stripe API key
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -543,8 +545,6 @@ class CreateCheckoutSessionView(APIView):
             })
 
         try:
-            
-            
             success_url = request.build_absolute_uri(reverse('payment-success')) + "?session_id={CHECKOUT_SESSION_ID}"
             cancel_url = request.build_absolute_uri(reverse('payment-cancel'))
             
@@ -631,7 +631,7 @@ def stripe_webhook(request):
                     else:
                         actual_payment_method = "card"
 
-        print("Detected Payment Method:", actual_payment_method)
+        
         
         
         # We can use metadata to get order_id reliably
@@ -648,15 +648,11 @@ def stripe_webhook(request):
                 order.is_paid = True
                 order.status = 'paid' 
                 order.save()
-                
-                
                 COMMISSION_RATE = settings.COMMISSION_RATE
                 for item in order.items.all():
                     if item.video and item.video.user:
-                        # Calculate item total
                         item_total = item.price * item.quantity
                         commission_amount = float(item_total) * COMMISSION_RATE
-                        # Create commission for the creator
                         Commission.objects.create(
                             creator=item.video.user,
                             video=item.video,
@@ -664,7 +660,13 @@ def stripe_webhook(request):
                             order_amount=item_total,
                             commission_amount=commission_amount
                         )
-
+            PaymentHistory.objects.create(
+            user=order.user,
+            order=order,
+            transaction_method=actual_payment_method,
+            amount=order.total_amount,
+            stripe_session_id=session["id"]
+          )
         except Order.DoesNotExist:
             print(f"Order not found for session {session['id']}")
 
@@ -843,4 +845,38 @@ class OrderListAPIView(APIView):
             message="Order deleted successfully",
             data=None,
             status_code=200
+        )
+        
+        
+
+
+class PaymentHistoryView(APIView):
+    permission_classes = [IsAuthenticated,IsAdminUser]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        search = request.query_params.get("search")
+
+        payments = PaymentHistory.objects.all().order_by("-created_at")
+
+        # Search filter
+        if search:
+            payments = payments.filter(
+                Q(payment_id__icontains=search) |
+                Q(transaction_method__icontains=search)
+            )
+
+        paginator = self.pagination_class()
+        paginated_queryset = paginator.paginate_queryset(payments, request)
+
+        serializer = PaymentHistorySerializer(paginated_queryset, many=True)
+
+        return APIResponse.success(
+            message="Payment history retrieved successfully",
+            data={
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": serializer.data
+            }
         )

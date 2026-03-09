@@ -1,6 +1,6 @@
 from UserAuthentication.models import User
 from rest_framework import serializers
-from .models import Product, ProductCategory, SaveProducts, Cart, CartItems, Order, OrderItem
+from .models import PaymentHistory, Product, ProductCategory, SaveProducts, Cart, CartItems, Order, OrderItem
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
@@ -250,3 +250,18 @@ class OrderListSerializer(serializers.ModelSerializer):
             'total_amount','number_of_items', 'status', 'created_at'
         ]
         read_only_fields = ['id', 'user', 'total_amount', 'status', 'created_at']
+        
+        
+#payment history serializer for admin dashboard       
+class PaymentHistorySerializer(serializers.ModelSerializer):
+    customer = serializers.CharField(source="user.full_name")
+
+    class Meta:
+        model = PaymentHistory
+        fields = [
+            "payment_id",
+            "customer",
+            "created_at",
+            "amount",
+            "transaction_method"
+        ]
