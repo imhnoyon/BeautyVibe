@@ -63,7 +63,7 @@ ROOT_URLCONF = 'BeautyVibe.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -173,3 +173,5 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 AI_API_URL ="https://wbsl64n9-8004.inc1.devtunnels.ms"
+
+COMMISSION_RATE= 0.10

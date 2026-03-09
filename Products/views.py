@@ -485,15 +485,6 @@ class CheckoutView(APIView):
                     price=item.product.price
                 )
                 
-                # # Check for video commission right when order is placed
-                # if getattr(item, 'video', None):
-                #     commission_amount = float(item.product.price * item.quantity) * 0.10
-                #     Commission.objects.create(
-                #         creator=item.video.user,   
-                #         video=item.video,
-                #         order_amount=item.product.price * item.quantity,
-                #         commission_amount=commission_amount
-                #     )
             cart_items.delete()
             
             return APIResponse.success(
@@ -552,13 +543,19 @@ class CreateCheckoutSessionView(APIView):
             })
 
         try:
+            from django.urls import reverse
+            
+            success_url = request.build_absolute_uri(reverse('payment-success')) + "?session_id={CHECKOUT_SESSION_ID}"
+            cancel_url = request.build_absolute_uri(reverse('payment-cancel'))
+            
             session = stripe.checkout.Session.create(
                 payment_method_types=["card"],
                 line_items=line_items,
                 mode="payment",
-                # Update these URLs with your real success/cancel pages
-                success_url="http://localhost:3000/payment-success?session_id={CHECKOUT_SESSION_ID}",
-                cancel_url="http://localhost:3000/payment-cancel",
+                customer_email=request.user.email,
+                success_url=success_url,
+                cancel_url=cancel_url,
+                
                 metadata={
                     "order_id": order.id
                 }
@@ -566,8 +563,7 @@ class CreateCheckoutSessionView(APIView):
 
             # Link stripe session to order
             order.stripe_session_id = session.id
-            order.is_paid=True
-            order.status='paid'
+            order.status = 'pending'
             order.save()
 
             return APIResponse.success(
@@ -581,7 +577,7 @@ class CreateCheckoutSessionView(APIView):
         except Exception as e:
             return APIResponse.error(message=f"Stripe error: {str(e)}")
             
-        
+from django.conf import settings     
 @csrf_exempt
 def stripe_webhook(request):
     payload = request.body
@@ -602,6 +598,42 @@ def stripe_webhook(request):
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         
+        #detect payment method
+        payment_intent_id = session.get("payment_intent")
+        if not payment_intent_id:
+            return HttpResponse(status=200)
+
+        payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        payment_method_id = payment_intent.get("payment_method")
+
+        actual_payment_method = "unknown"
+
+        if payment_method_id:
+            payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+
+            # Base type: card / link / paypal / etc.
+            method_type = payment_method.type
+            actual_payment_method = method_type
+
+            # Wallet detect for Google Pay / Apple Pay
+            if method_type == "card":
+                card_data = getattr(payment_method, "card", None)
+
+                # stripe-python objects usually support attribute access
+                if card_data and getattr(card_data, "wallet", None):
+                    wallet = card_data.wallet
+                    wallet_type = getattr(wallet, "type", None)
+
+                    if wallet_type == "google_pay":
+                        actual_payment_method = "google_pay"
+                    elif wallet_type == "apple_pay":
+                        actual_payment_method = "apple_pay"
+                    else:
+                        actual_payment_method = "card"
+
+        print("Detected Payment Method:", actual_payment_method)
+        
+        
         # We can use metadata to get order_id reliably
         order_id = session.get("metadata", {}).get("order_id")
         
@@ -614,17 +646,22 @@ def stripe_webhook(request):
                 
             if not order.is_paid:
                 order.is_paid = True
-                order.status = 'processing' 
+                order.status = 'paid' 
                 order.save()
                 
-                # Distribute commissions to creators if they made the sale!
+                
+                COMMISSION_RATE = settings.COMMISSION_RATE
                 for item in order.items.all():
-                    if getattr(item, 'video', None):
-                        commission_amount = float(item.price * item.quantity) * 0.10
+                    if item.video and item.video.user:
+                        # Calculate item total
+                        item_total = item.price * item.quantity
+                        commission_amount = float(item_total) * COMMISSION_RATE
+                        # Create commission for the creator
                         Commission.objects.create(
                             creator=item.video.user,
                             video=item.video,
-                            order_amount=item.price * item.quantity,
+                            payment_method=actual_payment_method,
+                            order_amount=item_total,
                             commission_amount=commission_amount
                         )
 

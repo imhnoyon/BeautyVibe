@@ -40,7 +40,7 @@ class VideoView(models.Model):
 class Commission(models.Model):
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name="commissions")
     video = models.ForeignKey(Video, on_delete=models.SET_NULL, null=True, blank=True, related_name="commissions")
-
+    payment_method = models.CharField(max_length=100, default="Stripe")
     order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 

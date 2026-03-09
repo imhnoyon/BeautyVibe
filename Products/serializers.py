@@ -166,7 +166,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = [
-            'id', 'product', 'product_details', 'shade', 'colour_hex', 
+            'id', 'product', 'product_details', 'video', 'shade', 'colour_hex', 
             'quantity', 'price'
         ]
 

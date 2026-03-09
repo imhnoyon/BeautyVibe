@@ -18,7 +18,7 @@ class VideoViewAdmin(admin.ModelAdmin):
     
 @admin.register(Commission)
 class CommissionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'creator', 'video', 'order_amount', 'commission_amount', 'created_at')
+    list_display = ('id', 'creator', 'video', 'order_amount', 'commission_amount', 'payment_method', 'created_at')
     search_fields = ('creator__username', 'video__caption')
     list_filter = ('created_at',)
     
