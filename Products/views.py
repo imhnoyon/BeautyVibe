@@ -16,7 +16,7 @@ import stripe
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
-
+from django.urls import reverse
 # Set stripe API key
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -543,7 +543,7 @@ class CreateCheckoutSessionView(APIView):
             })
 
         try:
-            from django.urls import reverse
+            
             
             success_url = request.build_absolute_uri(reverse('payment-success')) + "?session_id={CHECKOUT_SESSION_ID}"
             cancel_url = request.build_absolute_uri(reverse('payment-cancel'))
@@ -577,7 +577,7 @@ class CreateCheckoutSessionView(APIView):
         except Exception as e:
             return APIResponse.error(message=f"Stripe error: {str(e)}")
             
-from django.conf import settings     
+ 
 @csrf_exempt
 def stripe_webhook(request):
     payload = request.body
