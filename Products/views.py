@@ -485,18 +485,15 @@ class CheckoutView(APIView):
                     price=item.product.price
                 )
                 
-                # Check for video commission right when order is placed
-                if getattr(item, 'video', None):
-                    commission_amount = float(item.product.price * item.quantity) * 0.10
-                    Commission.objects.create(
-                        creator=item.video.user,   
-                        video=item.video,
-                        order_amount=item.product.price * item.quantity,
-                        commission_amount=commission_amount
-                    )
-
-            # IMPORTANT: Do NOT clear cart yet if we want user to pay immediately?
-            # Actually, clearing it is fine because Order has the items now.
+                # # Check for video commission right when order is placed
+                # if getattr(item, 'video', None):
+                #     commission_amount = float(item.product.price * item.quantity) * 0.10
+                #     Commission.objects.create(
+                #         creator=item.video.user,   
+                #         video=item.video,
+                #         order_amount=item.product.price * item.quantity,
+                #         commission_amount=commission_amount
+                #     )
             cart_items.delete()
             
             return APIResponse.success(
@@ -617,7 +614,7 @@ def stripe_webhook(request):
                 
             if not order.is_paid:
                 order.is_paid = True
-                order.status = 'processing' # Move from pending to processing
+                order.status = 'processing' 
                 order.save()
                 
                 # Distribute commissions to creators if they made the sale!
