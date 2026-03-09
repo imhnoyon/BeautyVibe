@@ -16,7 +16,7 @@ from google.auth.transport import requests
 from django.conf import settings
 from django.utils import timezone
 from Products.models import Order, Product, ProductCategory
-from Products.ai_helper_function import send_to_ai_recommendation, filter_products_queryset
+from Products.ai_helper_function import build_ai_payload, send_to_ai_recommendation
 from django.db.models.functions import TruncMonth
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -356,45 +356,8 @@ class GetProfileImageView(APIView):
         
         
 #product Recommendation view based on user profile analysis and preferences
-# from Products.models import Product, ProductCategory
-# from Products.serializers import  RecommendationResponseSerializer
-
-# class ProductRecommendationView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def post(self, request):
-#         user = request.user
-#         products = Product.objects.all()
-#         categories=ProductCategory.objects.all()
-        
-#         ai_result = send_to_ai_recommendation(
-#             user_profile=user,
-#             products=products,
-#             category=categories,
-#             api_key=request.headers.get("X-API-KEY")
-#         )
-
-#         serializer = RecommendationResponseSerializer(
-#             {
-#                 'id': str(user.id),
-#                 'user_profile': user,
-#                 'products': products,
-#                 'category': categories
-#             },
-#             context={'request': request}
-#         )
-
-#         return APIResponse.success(
-#             message="Recommendations fetched successfully",
-#             data={
-#                 "user_data": serializer.data,
-#                 "ai_recommendations": ai_result
-#             }
-#         )
-
-
-
-
+from Products.models import Product, ProductCategory
+from Products.serializers import  RecommendationResponseSerializer
 
 
 class ProductRecommendationView(APIView):
@@ -402,101 +365,42 @@ class ProductRecommendationView(APIView):
 
     def post(self, request):
         user = request.user
+        products = Product.objects.select_related("category").all()
+        categories = ProductCategory.objects.all()
 
-        category_filter = request.data.get("category")
-        search_filter = request.data.get("search")
+        api_key = request.headers.get("X-API-KEY")
+        if not api_key:
+            return APIResponse.error(
+                message="Missing AI API key in headers (X-API-KEY)",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
 
-        categories = ProductCategory.objects.all().order_by("name")
-        products = Product.objects.select_related("category").all().order_by("-id")
-
-        # optional local filtering before sending to AI
-        filtered_products = filter_products_queryset(
+        payload = build_ai_payload(
+            user_profile=user,
             products=products,
-            category_value=category_filter,
-            search_value=search_filter
+            categories=categories,
+            request=request
         )
 
         ai_result = send_to_ai_recommendation(
-            user_profile=user,
-            categories=categories,
-            products=filtered_products,
-            api_key=request.headers.get("X-API-KEY"),
-            request=request
+            payload=payload,
+            api_key=api_key
         )
 
         if "error" in ai_result:
             return APIResponse.error(
                 message=ai_result["error"],
-                status_code=400
+                status_code=status.HTTP_400_BAD_REQUEST
             )
-
-        # serialize sent payload preview
-        payload_serializer = RecommendationPayloadSerializer(
-            {
-                "user_id": str(user.id),
-                "user_profile": {
-                    "skin_tone": getattr(user, "skin_tone", ""),
-                    "undertone": getattr(user, "undertone", ""),
-                    "face_shape": getattr(user, "face_shape", ""),
-                    "eye_color": getattr(user, "eye_color", ""),
-                    "confidence_score": getattr(user, "confidence_score", 0),
-                    "summary": getattr(user, "summary", ""),
-                },
-                "categories": categories,
-                "products": filtered_products,
-            },
-            context={"request": request}
-        )
-
-        # optional: AI response থেকে matched product বা product names দিয়ে DB filter
-        matched_product_ids = []
-        matched_product_names = []
-
-        best_match_id = ai_result.get("best_match_id")
-        if best_match_id:
-            matched_product_ids.append(best_match_id)
-
-        matched_product = ai_result.get("matched_product", {})
-        if matched_product:
-            if matched_product.get("id"):
-                matched_product_ids.append(matched_product.get("id"))
-            if matched_product.get("name"):
-                matched_product_names.append(matched_product.get("name"))
-
-        recommended_products = Product.objects.none()
-
-        if matched_product_ids:
-            recommended_products = Product.objects.filter(id__in=matched_product_ids)
-
-        elif matched_product_names:
-            query = Q()
-            for product_name in matched_product_names:
-                query |= Q(name__icontains=product_name)
-            recommended_products = Product.objects.filter(query)
-
-        # apply same filters again if needed
-        recommended_products = filter_products_queryset(
-            products=recommended_products,
-            category_value=category_filter,
-            search_value=search_filter
-        ).select_related("category").distinct()
-
-        recommended_products_serializer = ProductRecommendationSerializer(
-            recommended_products,
-            many=True,
-            context={"request": request}
-        )
 
         return APIResponse.success(
             message="Recommendations fetched successfully",
             data={
-                "sent_payload": payload_serializer.data,
-                "ai_response": ai_result,
-                "recommended_products": recommended_products_serializer.data
+                # "sent_payload": payload,
+                "ai_recommendations": ai_result
             },
-            status_code=200
+            status_code=status.HTTP_200_OK
         )
-
 
 
 
@@ -504,8 +408,6 @@ class ProductRecommendationView(APIView):
 
 
 #admin dashboard view for superuser to get insights about the platform like total users, total revenue, total videos, total views and top creators etc
-
-
 class AdminDashboardAPIView(APIView):
     permission_classes = [IsAuthenticated,IsAdminUser]
 
