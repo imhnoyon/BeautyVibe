@@ -233,7 +233,7 @@ This backend uses:
 
 ---
 
-# 🔮 Future Improvements
+# 🔮 AI Recomendation
 
 * AI product recommendations
 * Smart video feed algorithm
