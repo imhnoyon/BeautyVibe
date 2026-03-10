@@ -204,14 +204,23 @@ http://127.0.0.1:8000/
 
 ---
 
-# 🔗 API Endpoints
-📦 Postman Collection
+## 📦 Postman Collection
 
-You can test all APIs using the Postman collection included in this repository.
+You can test all APIs using the Postman collection.
 
-BeautyVibe.postman_collection.json
+⬇️ **Download Postman Collection**
 
-Import this file into Postman to access all API requests.
+[Download BeautyVibe Postman Collection](./BeautyVibe.postman_collection.json)
+
+After downloading, import the file into Postman.
+
+Steps:
+
+1. Open Postman
+2. Click **Import**
+3. Select the downloaded JSON file
+4. All API endpoints will be added automatically
+
 
 # 🔐 Security
 
