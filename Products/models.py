@@ -246,3 +246,44 @@ class PaymentHistory(models.Model):
 
     def __str__(self):
         return f"{self.payment_id} - {self.user.full_name}"
+    
+    
+    
+    
+    
+    
+
+
+#For Withdrawn model
+class CreatorWithdrawal(models.Model):
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("processing", "Processing"),
+        ("completed", "Completed"),
+        ("rejected", "Rejected"),
+        ("failed", "Failed"),
+    )
+
+    creator = models.ForeignKey(User, on_delete=models.CASCADE,related_name="creator_withdrawals")
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    previous_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    current_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    withdraw_id = models.CharField(max_length=100, unique=True, editable=False)
+    stripe_transfer_id = models.CharField(max_length=255, null=True, blank=True)
+    stripe_payout_id = models.CharField(max_length=255, null=True, blank=True)
+    failure_reason = models.TextField(null=True, blank=True)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.withdraw_id:
+            self.withdraw_id = f"WDR-{uuid.uuid4().hex[:10].upper()}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.withdraw_id} - {self.creator.full_name} - {self.amount}"

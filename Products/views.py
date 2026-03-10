@@ -10,13 +10,15 @@ from .models import *
 from utils.api_response import APIResponse
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Sum, Count, Q, Case, When, DecimalField, Value
 from .pagination import CustomPagination
 import stripe
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from django.urls import reverse
+from .utils import *
+from django.db import transaction
 
 
 # Set stripe API key
@@ -880,3 +882,420 @@ class PaymentHistoryView(APIView):
                 "results": serializer.data
             }
         )
+        
+        
+#For Withdrawn views
+
+class CreateConnectAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        if not user.creator:
+            return APIResponse.error(
+                message="Only creators can connect Stripe account.",
+                status_code=403
+            )
+
+        try:
+            if not user.stripe_account_id:
+                account = stripe.Account.create(
+                    type="express",
+                    country="US",  # need to set supported country for your business/user
+                    email=user.email,
+                    capabilities={
+                        "transfers": {"requested": True},
+                    },
+                )
+                user.stripe_account_id = account.id
+                user.save(update_fields=["stripe_account_id"])
+            else:
+                account = stripe.Account.retrieve(user.stripe_account_id)
+
+            account_link = stripe.AccountLink.create(
+                account=account.id,
+                # refresh_url=f"{settings.FRONTEND_URL}/stripe/reauth",
+                # return_url=f"{settings.FRONTEND_URL}/stripe/return",
+                refresh_url = "http://127.0.0.1:8000/stripe/reauth/",
+                return_url = "http://127.0.0.1:8000/stripe/return/",
+                type="account_onboarding",
+            )
+
+            return APIResponse.success(
+                message="Stripe onboarding link generated successfully",
+                data={
+                    "stripe_account_id": account.id,
+                    "onboarding_url": account_link.url,
+                    "charges_enabled": account.get("charges_enabled", False),
+                    "payouts_enabled": account.get("payouts_enabled", False),
+                    "details_submitted": account.get("details_submitted", False),
+                }
+            )
+        except stripe.error.StripeError as e:
+            return APIResponse.error(
+                message=f"Stripe error: {str(e)}",
+                status_code=400
+            )
+            
+            
+#Creator login own deshboard
+class StripeDashboardLoginLinkView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        if not user.stripe_account_id:
+            return APIResponse.error(
+                message="Stripe account not connected.",
+                status_code=400
+            )
+
+        try:
+            login_link = stripe.Account.create_login_link(user.stripe_account_id)
+            return APIResponse.success(
+                message="Login link created successfully",
+                data={"url": login_link.url}
+            )
+        except stripe.error.StripeError as e:
+            return APIResponse.error(
+                message=f"Stripe error: {str(e)}",
+                status_code=400
+            )
+            
+            
+# Withdraw Request views
+class CreatorWithdrawRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        user = request.user
+
+        if not user.creator:
+            return APIResponse.error(
+                message="Only creators can withdraw.",
+                status_code=403
+            )
+
+        amount = request.data.get("amount")
+        if not amount:
+            return APIResponse.error(
+                message="Amount is required.",
+                status_code=400
+            )
+
+        try:
+            amount = Decimal(str(amount))
+        except Exception:
+            return APIResponse.error(
+                message="Invalid amount format.",
+                status_code=400
+            )
+
+        if amount <= 0:
+            return APIResponse.error(
+                message="Amount must be greater than 0.",
+                status_code=400
+            )
+
+        available_balance = get_creator_available_balance(user)
+
+        if amount > available_balance:
+            return APIResponse.error(
+                message=f"Insufficient balance. Available balance is {available_balance}.",
+                status_code=400
+            )
+
+        stripe_status = refresh_stripe_account_status(user)
+        if not stripe_status:
+            return APIResponse.error(
+                message="No connected Stripe account found. Please connect Stripe first.",
+                status_code=400
+            )
+
+        if not stripe_status["details_submitted"]:
+            return APIResponse.error(
+                message="Stripe onboarding is not completed.",
+                status_code=400
+            )
+
+        if not stripe_status["payouts_enabled"]:
+            return APIResponse.error(
+                message="Stripe payouts are not enabled for this account.",
+                status_code=400
+            )
+
+        withdrawal = CreatorWithdrawal.objects.create(
+            creator=user,
+            amount=amount,
+            previous_balance=available_balance,
+            current_balance=available_balance - amount,
+            status="pending",
+        )
+
+        return APIResponse.success(
+            message="Withdrawal request submitted successfully",
+            data={
+                "withdraw_id": withdrawal.withdraw_id,
+                "amount": str(withdrawal.amount),
+                "previous_balance": str(withdrawal.previous_balance),
+                "current_balance": str(withdrawal.current_balance),
+                "status": withdrawal.status,
+            }
+        )
+        
+        
+#Admin pending withdrawn request list
+class AdminWithdrawalListView(APIView):
+    permission_classes = [IsAdminUser]
+    paginator_class=CustomPagination
+    def get(self, request):
+        page = int(request.GET.get("page", 1))
+        page_size = int(request.GET.get("page_size", 10))
+
+        summary = CreatorWithdrawal.objects.aggregate(
+            total_pending_amount=Sum(
+                Case(
+                    When(status="pending", then="amount"),
+                    default=Value(0),
+                    output_field=DecimalField(),
+                )
+            ),
+            total_completed_amount=Sum(
+                Case(
+                    When(status="completed", then="amount"),
+                    default=Value(0),
+                    output_field=DecimalField(),
+                )
+            ),
+        )
+
+        stats = CreatorWithdrawal.objects.aggregate(
+            total_withdrawals=Count("id"),
+            total_completed=Count("id", filter=Q(status="completed")),
+            total_rejected=Count("id", filter=Q(status="rejected")),
+            total_pending=Count("id", filter=Q(status="pending")),
+            total_processing=Count("id", filter=Q(status="processing")),
+        )
+
+        withdrawals = CreatorWithdrawal.objects.select_related("creator")\
+            .filter(status="pending")\
+            .order_by("-requested_at")
+
+        paginator = CustomPagination(withdrawals, page_size)
+        page_obj = paginator.get_page(page)
+
+        pending_data = []
+        for w in page_obj.object_list:
+            pending_data.append({
+                "id": w.id,
+                "withdraw_id": w.withdraw_id,
+                "creator_id": str(w.creator.id),
+                "creator_name": w.creator.full_name,
+                "creator_email": w.creator.email,
+                "amount": float(w.amount),
+                "previous_balance": float(w.previous_balance),
+                "current_balance": float(w.current_balance),
+                "status": w.status,
+                "requested_at": w.requested_at,
+            })
+
+        return APIResponse.success(
+            message="Withdrawal list fetched successfully",
+            data={
+                "summary": {
+                    "total_pending_amount": float(summary["total_pending_amount"] or Decimal("0.00")),
+                    "total_completed_amount": float(summary["total_completed_amount"] or Decimal("0.00")),
+                    "total_withdrawals": stats["total_withdrawals"],
+                    "total_completed": stats["total_completed"],
+                    "total_rejected": stats["total_rejected"],
+                    "total_pending": stats["total_pending"],
+                    "total_processing": stats["total_processing"],
+                },
+                "pagination": {
+                    "total_records": paginator.count,
+                    "total_pages": paginator.num_pages,
+                    "current_page": page_obj.number,
+                    "page_size": page_size,
+                    "has_next": page_obj.has_next(),
+                    "has_previous": page_obj.has_previous(),
+                },
+                "pending_withdrawals": pending_data,
+            }
+        )
+        
+        
+#Admin approve or reject withdraw request
+class ApproveWithdrawalView(APIView):
+    permission_classes = [IsAdminUser]
+
+    @transaction.atomic
+    def post(self, request):
+        withdrawal_id = request.data.get("id")
+        new_status = request.data.get("status")  # approved / rejected
+
+        if not withdrawal_id:
+            return APIResponse.error(
+                message="Withdrawal ID is required.",
+                status_code=400
+            )
+
+        if new_status not in ["approved", "rejected"]:
+            return APIResponse.error(
+                message="Status must be approved or rejected.",
+                status_code=400
+            )
+
+        try:
+            withdrawal = CreatorWithdrawal.objects.select_related("creator").get(
+                id=withdrawal_id,
+                status="pending"
+            )
+        except CreatorWithdrawal.DoesNotExist:
+            return APIResponse.error(
+                message="Invalid or already processed withdrawal.",
+                status_code=404
+            )
+
+        # Reject
+        if new_status == "rejected":
+            withdrawal.status = "rejected"
+            withdrawal.failure_reason = "Rejected by admin"
+            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+
+            return APIResponse.success(
+                message="Withdrawal rejected successfully"
+            )
+
+        user = withdrawal.creator
+
+        if not user.stripe_account_id:
+            return APIResponse.error(
+                message="Creator has no connected Stripe account.",
+                status_code=400
+            )
+
+        stripe_status = refresh_stripe_account_status(user)
+        if not stripe_status:
+            return APIResponse.error(
+                message="Unable to verify Stripe account.",
+                status_code=400
+            )
+
+        if not stripe_status["details_submitted"]:
+            return APIResponse.error(
+                message="Creator has not completed Stripe onboarding.",
+                status_code=400
+            )
+
+        if not stripe_status["payouts_enabled"]:
+            return APIResponse.error(
+                message="Payouts are disabled for this creator.",
+                status_code=400
+            )
+
+        try:
+            # Check platform balance
+            balance = stripe.Balance.retrieve()
+            available_usd = sum(
+                b["amount"] for b in balance["available"]
+                if b["currency"] == "usd"
+            )
+
+            amount_cents = int(withdrawal.amount * 100)
+
+            if available_usd < amount_cents:
+                return APIResponse.error(
+                    message="Platform has insufficient Stripe balance.",
+                    status_code=400
+                )
+
+            # 1) Transfer platform balance -> connected account
+            transfer = stripe.Transfer.create(
+                amount=amount_cents,
+                currency="usd",
+                destination=user.stripe_account_id,
+                description=f"Creator withdrawal {withdrawal.withdraw_id}",
+            )
+
+            # 2) Optional manual payout connected account -> bank/debit card
+            payout = stripe.Payout.create(
+                amount=amount_cents,
+                currency="usd",
+                stripe_account=user.stripe_account_id,
+            )
+
+            withdrawal.stripe_transfer_id = transfer.id
+            withdrawal.stripe_payout_id = payout.id
+            withdrawal.status = "processing"
+            withdrawal.save(update_fields=[
+                "stripe_transfer_id",
+                "stripe_payout_id",
+                "status",
+                "updated_at",
+            ])
+
+            return APIResponse.success(
+                message="Withdrawal approved and payout initiated successfully",
+                data={
+                    "transfer_id": transfer.id,
+                    "payout_id": payout.id,
+                    "status": withdrawal.status,
+                }
+            )
+
+        except stripe.error.StripeError as e:
+            withdrawal.status = "failed"
+            withdrawal.failure_reason = str(e)
+            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+
+            return APIResponse.error(
+                message=f"Stripe payout failed: {str(e)}",
+                status_code=400
+            )
+            
+            
+#Webhook view
+import stripe
+from django.conf import settings
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+@csrf_exempt
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload,
+            sig_header,
+            settings.STRIPE_WEBHOOK_SECRET
+        )
+    except Exception:
+        return HttpResponse(status=400)
+
+    event_type = event["type"]
+    obj = event["data"]["object"]
+
+    if event_type == "payout.paid":
+        payout_id = obj.get("id")
+        withdrawal = CreatorWithdrawal.objects.filter(stripe_payout_id=payout_id).first()
+        if withdrawal:
+            withdrawal.status = "completed"
+            withdrawal.save(update_fields=["status", "updated_at"])
+
+    elif event_type == "payout.failed":
+        payout_id = obj.get("id")
+        withdrawal = CreatorWithdrawal.objects.filter(stripe_payout_id=payout_id).first()
+        if withdrawal:
+            withdrawal.status = "failed"
+            withdrawal.failure_reason = obj.get("failure_message") or "Payout failed"
+            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+
+    return HttpResponse(status=200)

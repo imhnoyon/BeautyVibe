@@ -2,7 +2,7 @@ from django.urls import path
 
 from Products.success_pages import StripePaymentCancelView, StripePaymentSuccessView
 from .views import *
-
+from .success_pages import *
 urlpatterns = [
     path('create/', ProductCreateView.as_view(), name='product-create'),
     path('products/<int:pk>/', ProductCreateView.as_view(), name='product-detail'),
@@ -29,7 +29,17 @@ urlpatterns = [
     #payment history url for admin dashboard
     path("payment-history/", PaymentHistoryView.as_view(), name="payment-history"),
     
+    #For withdraw
+    path("creator/stripe/connect/", CreateConnectAccountView.as_view()),
+    path("creator/stripe/dashboard-link/", StripeDashboardLoginLinkView.as_view()),
+    path("creator/withdraw/request/", CreatorWithdrawRequestView.as_view()),
+    path("admin/withdrawals/", AdminWithdrawalListView.as_view()),
+    path("admin/withdrawals/action/", ApproveWithdrawalView.as_view()),
+    path("stripe/webhook/", stripe_webhook),
     
     path("payment-success/", StripePaymentSuccessView.as_view(), name="payment-success"),
     path("payment-cancel/", StripePaymentCancelView.as_view(), name="payment-cancel"),
+    
+    path("stripe/reauth/", stripe_reauth_page.as_view(), name="stripe-reauth"),
+    path("stripe/return/", stripe_return_page.as_view(), name="stripe-return"),
 ]   

@@ -38,7 +38,12 @@ class SignupView(CreateAPIView):
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                errors=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        # serializer.is_valid(raise_exception=True)
         user = serializer.save()
         code = generate_otp()
         VerificationCode.objects.create(
@@ -56,6 +61,7 @@ class SignupView(CreateAPIView):
             },
             status_code=status.HTTP_201_CREATED
         )
+
         
         
 # -------Email Verification views ------------ #

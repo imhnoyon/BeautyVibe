@@ -130,8 +130,15 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-REST_FRAMEWORK ={
-    'DEFAULT_AUTHENTICATION_CLASSES':[
+# REST_FRAMEWORK ={
+#     'DEFAULT_AUTHENTICATION_CLASSES':[
+#         "rest_framework_simplejwt.authentication.JWTAuthentication",
+        
+#     ],
+#     "EXCEPTION_HANDLER": "core.exceptions.error"
+# }
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     
