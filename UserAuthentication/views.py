@@ -238,6 +238,12 @@ class GoogleSignInView(APIView):
     def post(self, request):
         serializer = GoogleSignInSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # if not serializer.is_valid():
+        #     return APIResponse.error(
+        #         # errors=serializer.errors,
+        #         message=serializer.errors,
+        #         status_code=status.HTTP_400_BAD_REQUEST
+        #     )
         token = serializer.validated_data['id_token']
 
         try:
