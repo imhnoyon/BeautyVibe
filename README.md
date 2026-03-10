@@ -204,73 +204,23 @@ http://127.0.0.1:8000/
 
 ---
 
-# 🔗 API Endpoints
+## 📦 Postman Collection
 
-## Authentication
+You can test all APIs using the Postman collection.
 
-```
-POST /auth/register/
-POST /auth/login/
-```
+⬇️ **Download Postman Collection**
 
----
+[Download BeautyVibe Postman Collection](./BeautyVibe.postman_collection.json)
 
-## Products
+After downloading, import the file into Postman.
 
-```
-GET /products/
-GET /products/?category=lipstick
-GET /products/?search=brand
-```
+Steps:
 
----
+1. Open Postman
+2. Click **Import**
+3. Select the downloaded JSON file
+4. All API endpoints will be added automatically
 
-## Video Upload
-
-```
-POST /videos/upload/
-```
-
-Body:
-
-```
-product_id
-video_url
-```
-
----
-
-## Stripe Checkout
-
-```
-POST /payments/create-checkout-session/
-```
-
----
-
-## Creator Withdraw
-
-```
-POST /creator/withdraw/request/
-```
-
----
-
-## Withdraw History
-
-```
-GET /creator/withdraw/history/
-```
-
----
-
-## Commission Tracking
-
-```
-GET /admin/commission-tracking/
-```
-
----
 
 # 🔐 Security
 
