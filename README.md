@@ -205,72 +205,13 @@ http://127.0.0.1:8000/
 ---
 
 # 🔗 API Endpoints
+📦 Postman Collection
 
-## Authentication
+You can test all APIs using the Postman collection included in this repository.
 
-```
-POST /auth/register/
-POST /auth/login/
-```
+BeautyVibe.postman_collection.json
 
----
-
-## Products
-
-```
-GET /products/
-GET /products/?category=lipstick
-GET /products/?search=brand
-```
-
----
-
-## Video Upload
-
-```
-POST /videos/upload/
-```
-
-Body:
-
-```
-product_id
-video_url
-```
-
----
-
-## Stripe Checkout
-
-```
-POST /payments/create-checkout-session/
-```
-
----
-
-## Creator Withdraw
-
-```
-POST /creator/withdraw/request/
-```
-
----
-
-## Withdraw History
-
-```
-GET /creator/withdraw/history/
-```
-
----
-
-## Commission Tracking
-
-```
-GET /admin/commission-tracking/
-```
-
----
+Import this file into Postman to access all API requests.
 
 # 🔐 Security
 
