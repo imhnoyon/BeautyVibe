@@ -105,7 +105,7 @@ class Cart(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.user.email
+        return self.user.full_name
     
 #the model for hold all product---
 class CartItems(models.Model):
@@ -124,7 +124,7 @@ class CartItems(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return self.cart.user.email
+        return self.cart.user.full_name
 
 
 # --- Order and Checkout Models ---
