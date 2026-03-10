@@ -206,3 +206,54 @@ class VideoListSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return SharedVideo.objects.filter(user=request.user, video=obj).exists()
         return False
+
+
+
+
+
+
+
+
+# creator deshboard serializers
+class ProductShownCreatorSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    category = serializers.CharField(source="category.name", read_only=True)
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "name",
+            "shade",
+            "price",
+            "category",
+            "colour_hex",
+            "rating",
+            "image",
+            "created_at",
+        ]
+    def get_image(self, obj):
+        request = self.context.get("request")
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+
+class CreatorVideoSerializer(serializers.ModelSerializer):
+    products = serializers.SerializerMethodField()
+    creator_name = serializers.CharField(source="user.full_name", read_only=True)
+
+    class Meta:
+        model = Video
+        fields = [
+            "id",
+            "creator_name",
+            "products",
+            "like_count",
+            "video_url",
+            "created_at",
+        ]
+
+    def get_products(self, obj):
+        products = Product.objects.filter(product_videos_product=obj)
+        return ProductShownCreatorSerializer(products,many=True,context=self.context).data

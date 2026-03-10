@@ -8,7 +8,7 @@ from .serializers import *
 from utils.api_response import APIResponse
 from django.db.models import Q, Sum, Max
 from django.shortcuts import get_object_or_404
-
+from permission_class import IsCreator
 
 
 class ProductCategoryListView(APIView):
@@ -113,18 +113,36 @@ class VideoWatchView(APIView):
         
 
 
+# from django.db.models import Sum
+
 class CreatorDashboardView(APIView):
     """
     GET /creator/dashboard/
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsCreator]
+    pagination_class = CustomPagination
 
     def get(self, request):
         creator = request.user
 
+        # total views
         total_views = VideoView.objects.filter(video__user=creator).count()
 
-        # Sales + commission (based on Commission table)
+        # creator videos queryset
+        videos = Video.objects.filter(user=creator).order_by("-created_at")
+        total_videos = videos.count()
+
+        # pagination apply only for videos
+        paginator = self.pagination_class()
+        paginated_videos = paginator.paginate_queryset(videos, request)
+
+        video_serializer = CreatorVideoSerializer(
+            paginated_videos,
+            many=True,
+            context={"request": request}
+        )
+
+        # Sales + commission
         agg = Commission.objects.filter(creator=creator).aggregate(
             total_sales=Sum("order_amount"),
             total_commission=Sum("commission_amount")
@@ -138,7 +156,16 @@ class CreatorDashboardView(APIView):
             data={
                 "views": total_views,
                 "sales": float(total_sales),
+                "videos_count": total_videos,
                 "commission_earned": float(total_commission),
+
+                  # pagination outside
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+
+                # videos list
+                "videos": video_serializer.data
             }
         )
         
