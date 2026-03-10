@@ -1,0 +1,6 @@
+stripe:
+1.first download stripe
+2.move inside the project 
+3.install stripe
+4.run the webhook
+stripe listen --forward-to http://127.0.0.1:8000/products/stripe/webhook/
