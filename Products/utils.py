@@ -48,3 +48,44 @@ def get_creator_available_balance(user):
 
 
 
+def get_connected_account_payout_info(stripe_account_id):
+    """
+    Returns withdraw method + bank/card display info
+    """
+    try:
+        bank_accounts = stripe.Account.list_external_accounts(
+            stripe_account_id,
+            object="bank_account",
+            limit=10
+        )
+
+        if bank_accounts.data:
+            bank = bank_accounts.data[0]
+            return {
+                "withdraw_method": "bank_account",
+                "bank_name": bank.get("bank_name"),
+                "bank_last4": bank.get("last4"),
+            }
+
+        cards = stripe.Account.list_external_accounts(
+            stripe_account_id,
+            object="card",
+            limit=10
+        )
+
+        if cards.data:
+            card = cards.data[0]
+            return {
+                "withdraw_method": "debit_card",
+                "bank_name": f"{card.get('brand', 'Card')} Card",
+                "bank_last4": card.get("last4"),
+            }
+
+    except Exception as e:
+        print("Payout info detect error:", e)
+
+    return {
+        "withdraw_method": "unknown",
+        "bank_name": None,
+        "bank_last4": None,
+    }

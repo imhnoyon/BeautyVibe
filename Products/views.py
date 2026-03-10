@@ -913,12 +913,13 @@ class CreateConnectAccountView(APIView):
             else:
                 account = stripe.Account.retrieve(user.stripe_account_id)
 
+            refresh_url = request.build_absolute_uri(reverse('stripe-reauth'))
+            return_url = request.build_absolute_uri(reverse('stripe-return'))
+
             account_link = stripe.AccountLink.create(
                 account=account.id,
-                # refresh_url=f"{settings.FRONTEND_URL}/stripe/reauth",
-                # return_url=f"{settings.FRONTEND_URL}/stripe/return",
-                refresh_url = "http://127.0.0.1:8000/stripe/reauth/",
-                return_url = "http://127.0.0.1:8000/stripe/return/",
+                refresh_url=refresh_url,
+                return_url=return_url,
                 type="account_onboarding",
             )
 
@@ -1048,9 +1049,10 @@ class CreatorWithdrawRequestView(APIView):
         
         
 #Admin pending withdrawn request list
+from django.core.paginator import Paginator
 class AdminWithdrawalListView(APIView):
     permission_classes = [IsAdminUser]
-    paginator_class=CustomPagination
+    # paginator_class=CustomPagination
     def get(self, request):
         page = int(request.GET.get("page", 1))
         page_size = int(request.GET.get("page_size", 10))
@@ -1084,7 +1086,7 @@ class AdminWithdrawalListView(APIView):
             .filter(status="pending")\
             .order_by("-requested_at")
 
-        paginator = CustomPagination(withdrawals, page_size)
+        paginator = Paginator(withdrawals, page_size)
         page_obj = paginator.get_page(page)
 
         pending_data = []
@@ -1226,14 +1228,23 @@ class ApproveWithdrawalView(APIView):
                 currency="usd",
                 stripe_account=user.stripe_account_id,
             )
-
+            
+            payout_info = get_connected_account_payout_info(user.stripe_account_id)
+            
             withdrawal.stripe_transfer_id = transfer.id
             withdrawal.stripe_payout_id = payout.id
-            withdrawal.status = "processing"
+            withdrawal.withdraw_method = payout_info["withdraw_method"]
+            withdrawal.bank_name = payout_info["bank_name"]
+            withdrawal.bank_last4 = payout_info["bank_last4"]
+
+            withdrawal.status = "completed"
             withdrawal.save(update_fields=[
                 "stripe_transfer_id",
                 "stripe_payout_id",
                 "status",
+                "withdraw_method",
+                "bank_name",
+                "bank_last4",
                 "updated_at",
             ])
 
@@ -1299,3 +1310,45 @@ def stripe_webhook(request):
             withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
 
     return HttpResponse(status=200)
+
+
+
+
+
+
+#Withdraw list for Creator-user
+class WithdrawHistoryListView(APIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        user = request.user
+        search = request.query_params.get("search")
+
+        withdrawals = CreatorWithdrawal.objects.filter(
+            creator=user
+        ).order_by("-requested_at")
+
+        if search:
+            withdrawals = withdrawals.filter(
+                Q(withdraw_id__icontains=search) |
+                Q(status__icontains=search)
+            )
+
+        paginator = self.pagination_class()
+        paginated_withdrawals = paginator.paginate_queryset(withdrawals, request)
+
+        serializer = WithdrawHistorySerializer(
+            paginated_withdrawals,
+            many=True
+        )
+
+        return APIResponse.success(
+            message="Withdraw history retrieved successfully",
+            data={
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "withdrawals": serializer.data
+            }
+        )

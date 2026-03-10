@@ -75,7 +75,7 @@ class CommissionTrackingSerializer(serializers.Serializer):
     date = serializers.CharField()
     total_sales = serializers.DecimalField(max_digits=12, decimal_places=2)
     commission = serializers.DecimalField(max_digits=12, decimal_places=2)
-    progress = serializers.CharField()
+    # progress = serializers.CharField()
     
     
     

@@ -263,18 +263,26 @@ class CreatorWithdrawal(models.Model):
         ("rejected", "Rejected"),
         ("failed", "Failed"),
     )
-
+    WITHDRAW_METHODS = (
+        ("bank_account", "Bank Account"),
+        ("debit_card", "Debit Card"),
+        ("unknown", "Unknown"),
+    )
     creator = models.ForeignKey(User, on_delete=models.CASCADE,related_name="creator_withdrawals")
 
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     previous_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     current_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-
+    withdraw_method = models.CharField(max_length=30, choices=WITHDRAW_METHODS, default="unknown")
+    
     withdraw_id = models.CharField(max_length=100, unique=True, editable=False)
     stripe_transfer_id = models.CharField(max_length=255, null=True, blank=True)
     stripe_payout_id = models.CharField(max_length=255, null=True, blank=True)
     failure_reason = models.TextField(null=True, blank=True)
 
+    bank_name = models.CharField(max_length=255, null=True, blank=True)
+    bank_last4 = models.CharField(max_length=10, null=True, blank=True)
+    
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
 
     requested_at = models.DateTimeField(auto_now_add=True)

@@ -1,7 +1,7 @@
 from UserAuthentication.models import User
 from rest_framework import serializers
 from .models import PaymentHistory, Product, ProductCategory, SaveProducts, Cart, CartItems, Order, OrderItem
-
+from Products.models import CreatorWithdrawal
 
 class ProductCategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -265,3 +265,29 @@ class PaymentHistorySerializer(serializers.ModelSerializer):
             "amount",
             "transaction_method"
         ]
+        
+        
+#Withdraw history for creator-profile
+class WithdrawHistorySerializer(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+    withdraw_date = serializers.DateTimeField(source="requested_at", format="%b %d, %Y", read_only=True)
+
+    class Meta:
+        model = CreatorWithdrawal
+        fields = [
+            "id",
+            "withdraw_id",
+            "title",
+            "amount",
+            "status",
+            "bank_name",
+            "bank_last4",
+            "withdraw_method",
+            "withdraw_date",
+            "requested_at",
+        ]
+
+    def get_title(self, obj):
+        if obj.bank_name and obj.bank_last4:
+            return f"Payout to {obj.bank_name} ••{obj.bank_last4}"
+        return "Withdraw Request"

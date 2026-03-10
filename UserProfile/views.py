@@ -255,6 +255,86 @@ class OrderHistoryView(APIView):
             "orders": serializer.data
         })
         
+from Products.models import CreatorWithdrawal
+# class CommissionTrackingAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+#     pagination_class = CustomPagination
+
+#     def get(self, request):
+#         search = request.query_params.get("search")
+
+#         commissions = Commission.objects.select_related("creator", "video").all()
+
+#         if search:
+#             commissions = commissions.filter(
+#                 Q(creator__full_name__icontains=search) |
+#                 Q(creator__email__icontains=search)
+#             )
+
+#         grouped_commissions = (
+#             commissions
+#             .values("creator", "creator__full_name")
+#             .annotate(
+#                 total_sales=Sum("order_amount"),
+#                 commission=Sum("commission_amount"),
+#                 last_date=Max("created_at")
+#             )
+#             .order_by("-last_date")
+#         )
+
+#         commission_data = [
+#             {
+#                 "creator": item["creator__full_name"],
+#                 "date": item["last_date"].strftime("%b %d, %Y") if item["last_date"] else None,
+#                 "total_sales": item["total_sales"] or 0,
+#                 "commission": item["commission"] or 0,
+#                 "progress": "Paid" if (item["commission"] or 0) > 0 else "Pending",
+#             }
+#             for item in grouped_commissions
+#         ]
+
+#         # Top cards summary
+#         total_withdraw = 0
+#         paid_payouts = 0
+
+#         for item in commission_data:
+#             if item["progress"] == "Paid":
+#                 paid_payouts += item["commission"]
+#             else:
+#                 pending_payouts += item["commission"]
+                
+#         # total withdrawn from withdrawal table
+#         total_withdraw = CreatorWithdrawal.objects.filter(
+#             status="completed"
+#         ).aggregate(
+#             total=Sum("amount")
+#         )["total"] or 0
+#         paginator = self.pagination_class()
+#         paginated_data = paginator.paginate_queryset(commission_data, request)
+
+#         serializer = CommissionTrackingSerializer(paginated_data, many=True)
+
+#         return APIResponse.success(
+#             message="Commission tracking retrieved successfully",
+#             data={
+#                 "summary": {
+#                     "pending_payouts": paid_payouts,
+#                     "total_withdraw": total_withdraw,
+#                 },
+#                 "table": {
+#                     "total": len(commission_data),
+#                     "page": paginator.page.number,
+#                     "total_pages": paginator.page.paginator.num_pages,
+#                     "next": paginator.get_next_link(),
+#                     "previous": paginator.get_previous_link(),
+#                     "commissions": serializer.data
+#                 }
+#             }
+#         )
+        
+
+from django.db.models import Sum, Max, Q
+from decimal import Decimal
 
 class CommissionTrackingAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -288,20 +368,25 @@ class CommissionTrackingAPIView(APIView):
                 "date": item["last_date"].strftime("%b %d, %Y") if item["last_date"] else None,
                 "total_sales": item["total_sales"] or 0,
                 "commission": item["commission"] or 0,
-                "progress": "Paid" if (item["commission"] or 0) > 0 else "Pending",
             }
             for item in grouped_commissions
         ]
 
-        # Top cards summary
-        pending_payouts = 0
-        paid_payouts = 0
+        # -------- SUMMARY --------
 
-        for item in commission_data:
-            if item["progress"] == "Paid":
-                paid_payouts += item["commission"]
-            else:
-                pending_payouts += item["commission"]
+        total_commission = Commission.objects.aggregate(
+            total=Sum("commission_amount")
+        )["total"] or Decimal("0.00")
+
+        total_withdraw = CreatorWithdrawal.objects.filter(
+            status="completed"
+        ).aggregate(
+            total=Sum("amount")
+        )["total"] or Decimal("0.00")
+
+        pending_payouts = total_commission - total_withdraw
+
+        # -------- PAGINATION --------
 
         paginator = self.pagination_class()
         paginated_data = paginator.paginate_queryset(commission_data, request)
@@ -312,8 +397,8 @@ class CommissionTrackingAPIView(APIView):
             message="Commission tracking retrieved successfully",
             data={
                 "summary": {
-                    "pending_payouts": pending_payouts,
-                    "paid_payouts": paid_payouts,
+                    "pending_payouts": float(pending_payouts),
+                    "total_withdraw": float(total_withdraw),
                 },
                 "table": {
                     "total": len(commission_data),
@@ -325,8 +410,6 @@ class CommissionTrackingAPIView(APIView):
                 }
             }
         )
-        
-        
         
 
 # admin can add new policy for creator 

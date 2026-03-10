@@ -36,7 +36,7 @@ urlpatterns = [
     path("admin/withdrawals/", AdminWithdrawalListView.as_view()),
     path("admin/withdrawals/action/", ApproveWithdrawalView.as_view()),
     path("stripe/webhook/", stripe_webhook),
-    
+    path("creator/withdraw/history/", WithdrawHistoryListView.as_view(), name="creator-withdraw-history"),
     path("payment-success/", StripePaymentSuccessView.as_view(), name="payment-success"),
     path("payment-cancel/", StripePaymentCancelView.as_view(), name="payment-cancel"),
     

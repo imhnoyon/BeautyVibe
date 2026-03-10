@@ -39,12 +39,12 @@ class StripePaymentCancelView(APIView):
         return render(request, "Products/payment_cancel.html")
     
     
-    
-from django.shortcuts import render
 class stripe_reauth_page(APIView):
-    def get(request):
+    permission_classes = [AllowAny]
+    def get(self, request):
         return render(request, "Products/reauth.html")
 
 class stripe_return_page(APIView):
-    def get(request):
+    permission_classes = [AllowAny]
+    def get(self, request):
         return render(request, "Products/return.html")
