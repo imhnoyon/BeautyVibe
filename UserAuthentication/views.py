@@ -301,7 +301,29 @@ class GetProfileImageView(APIView):
         message="Profile image retrieved successfully",
         data=serializer.data  
     )
+     
+     #update
+    def put(self, request, *args, **kwargs):
+        serializer = ProfileImageSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
 
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message=serializer.errors,
+                status_code=400
+            )
+
+        serializer.save()
+
+        return APIResponse.success(
+            message="Profile updated successfully",
+            data=serializer.data)
+        
+        
     def post(self, request, *args, **kwargs):
         ai_api_key = request.headers.get("X-API-KEY")
         if not ai_api_key:

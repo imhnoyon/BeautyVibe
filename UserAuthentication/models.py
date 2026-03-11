@@ -50,8 +50,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.email
     
     
-    
-    
 #----- verification code model -----------#
 class VerificationCode(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
