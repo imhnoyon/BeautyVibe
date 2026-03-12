@@ -5,11 +5,17 @@ import uuid
 
 # User Model-----------
 class User(AbstractBaseUser, PermissionsMixin):
+    roles = {
+        ('admin','Admin'),
+        ('user','User')
+    }
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=150,null=True, blank=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
+    
+    role=models.CharField(max_length=10,choices=roles,default='user')
     
     profile_picture = models.ImageField(upload_to="User/Profile_picture",blank=True, null=True)
     creator = models.BooleanField(default=False,null=True, blank=True)
@@ -41,11 +47,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = []
     objects = UserManager()
     
-    def save(self, *args, **kwargs):
-        if not self.pk:
-            self.role = self.base_role
-        return super().save(*args, **kwargs)
+    # def save(self, *args, **kwargs):
+    #     if not self.pk:
+    #         self.role = self.base_role
+    #     return super().save(*args, **kwargs)
     
+    def save(self, *args, **kwargs):
+        if self.is_superuser:
+            self.role = 'admin'
+        super().save(*args, **kwargs)
+        
     def __str__(self):
         return self.email
     

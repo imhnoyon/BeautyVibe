@@ -103,6 +103,7 @@ class SignInView(APIView):
                 **tokens,
                 # "access_token": tokens.get("access"),
                 # "refresh_token": tokens.get("refresh"),
+                 "role": user.role,
                 "user_id": str(user.id),
                
             }
