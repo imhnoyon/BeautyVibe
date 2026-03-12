@@ -1,4 +1,5 @@
 from UserAuthentication.models import User
+from UserProfile.models import SaveProduct
 from rest_framework import serializers
 from .models import PaymentHistory, Product, ProductCategory, SaveProducts, Cart, CartItems, Order, OrderItem
 from Products.models import CreatorWithdrawal
@@ -18,7 +19,8 @@ class ProductSerializer(serializers.ModelSerializer):
         slug_field='name'   
     )
     image = serializers.ImageField(required=False)
-     
+  
+    is_saved = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -35,9 +37,16 @@ class ProductSerializer(serializers.ModelSerializer):
             'rating',
             'description',
             'image',
+            "is_saved",
             'created_at',
         ]
         read_only_fields = ['id', 'slug', 'created_at']
+        
+        def get_is_saved(self, obj):
+            user = self.context.get('request').user
+            if user.is_authenticated:
+                return SaveProduct.objects.filter(user=user, product=obj).exists()
+            return False
         
 
         
