@@ -42,11 +42,11 @@ class ProductSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'slug', 'created_at']
         
-        def get_is_saved(self, obj):
-            user = self.context.get('request').user
-            if user.is_authenticated:
-                return SaveProduct.objects.filter(user=user, product=obj).exists()
-            return False
+    def get_is_saved(self, obj):
+        user = self.context.get('request').user
+        if user and user.is_authenticated:
+            return SaveProduct.objects.filter(user=user, product=obj).exists()
+        return False
         
 
         
