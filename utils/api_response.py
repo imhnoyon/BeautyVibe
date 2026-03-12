@@ -27,7 +27,7 @@ class APIResponse:
         return Response(response_data, status=status_code)
 
     # @staticmethod
-    # def error(message="Error", errors=None, error_code=None, status_code=status.HTTP_400_BAD_REQUEST, **kwargs):
+    # def error1(message="Error", errors=None, error_code=None, status_code=status.HTTP_400_BAD_REQUEST, **kwargs):
     #     """
     #     Returns an error response.
     #     :param message: Error message string
@@ -56,9 +56,39 @@ class APIResponse:
     
 
     
+    # @staticmethod
+    # def error(message="Error", errors=None, error_code=None, status_code=status.HTTP_400_BAD_REQUEST, **kwargs):
+
+    # # Support alias
+    #     if errors is None and 'data' in kwargs:
+    #         errors = kwargs['data']
+
+    #     # Extract first error cleanly
+    #     if errors:
+    #         if isinstance(errors, dict):
+    #             first_error = list(errors.values())[0]
+
+    #             if isinstance(first_error, list):
+    #                 message = first_error[0]
+    #             else:
+    #                 message = first_error
+
+    #         elif isinstance(errors, list):
+    #             message = errors[0]
+
+    #     response_data = {
+    #         "success": False,
+    #         "status": status_code,
+    #         "message": str(message),  # convert ErrorDetail -> clean string
+    #     }
+
+    #     if error_code:
+    #         response_data["error_code"] = error_code
+
+    #     return Response(response_data, status=status_code)
+    
     @staticmethod
     def error(message="Error", errors=None, error_code=None, status_code=status.HTTP_400_BAD_REQUEST, **kwargs):
-
     # Support alias
         if errors is None and 'data' in kwargs:
             errors = kwargs['data']
@@ -66,13 +96,12 @@ class APIResponse:
         # Extract first error cleanly
         if errors:
             if isinstance(errors, dict):
-                first_error = list(errors.values())[0]
-
-                if isinstance(first_error, list):
-                    message = first_error[0]
+                # Take first field and its error
+                field_name, field_errors = list(errors.items())[0]
+                if isinstance(field_errors, list):
+                    message = f"{field_name} field is required" if field_errors[0] == "This field is required." else f"{field_name}: {field_errors[0]}"
                 else:
-                    message = first_error
-
+                    message = f"{field_name}: {field_errors}"
             elif isinstance(errors, list):
                 message = errors[0]
 
@@ -86,5 +115,3 @@ class APIResponse:
             response_data["error_code"] = error_code
 
         return Response(response_data, status=status_code)
-    
-   
