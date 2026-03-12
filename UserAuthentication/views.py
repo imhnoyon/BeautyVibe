@@ -525,6 +525,7 @@ class AdminDashboardAPIView(APIView):
                 "id": str(creator.id),
                 "name": creator.full_name,
                 "email": creator.email,
+                "image": request.build_absolute_uri(creator.profile_picture.url) if creator.profile_picture else None,
                 "videos": creator.total_videos or 0,
                 "sales": float(creator.total_sales or 0),
                 "commission": float(creator.total_commission or 0),
