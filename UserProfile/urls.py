@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import *
-
+from Products.views import SaveProductsView
 urlpatterns = [
     path("categories-list/", ProductCategoryListView.as_view()),
     path("categories/products/<int:category_id>/", ProductByCategoryView.as_view()),
@@ -41,5 +41,8 @@ urlpatterns = [
     # shared video view for user to see the shared video and also remove the shared video from the list
     path("videos/share/<int:video_id>/", ShareVideoAPIView.as_view(), name="share-video"),
     path("videos/shared/", SharedVideoListAPIView.as_view(), name="shared-video-list"),
-
+    
+    #product save unsave
+    path("products/save-unsave/<int:product_id>/", SaveUnsaveProductView.as_view(), name="save-unsave-product"),
+    path("saved-products/", SavedProductListView.as_view(), name="saved-product-list"),
 ]

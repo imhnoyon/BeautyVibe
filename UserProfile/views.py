@@ -704,3 +704,69 @@ class SharedVideoListAPIView(APIView):
                 "videos": serializer.data
             }
         )
+        
+        
+#product save/Unsaved         
+class SaveUnsaveProductView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, product_id):
+        product = get_object_or_404(Product, id=product_id)
+
+        saved_product = SaveProduct.objects.filter(
+            user=request.user,
+            product=product
+        ).first()
+
+        if saved_product:
+            saved_product.delete()
+            return APIResponse.success(
+                message="Product unsaved successfully",
+                data={
+                    "is_saved": False,
+                    "product_id": product.id
+                },
+                status_code=200
+            )
+
+        saved_product = SaveProduct.objects.create(
+            user=request.user,
+            product=product
+        )
+
+        return APIResponse.success(
+            message="Product saved successfully",
+            data={
+                "is_saved": True,
+                "product_id": product.id,
+                "saved_product_id": saved_product.id
+            },
+            status_code=201
+        )
+        
+        
+        
+#save product list view
+class SavedProductListView(APIView):
+    permission_classes = [IsAuthenticated]
+    paginator_class=CustomPagination
+    def get(self, request):
+        saved_products = SaveProduct.objects.filter(
+            user=request.user
+        ).select_related("product")
+
+        paginator = CustomPagination()
+        paginated_queryset = paginator.paginate_queryset(saved_products, request)
+
+        serializer = SaveProductSerializer(
+            paginated_queryset,
+            many=True,
+            context={"request": request}
+        )
+
+        return paginator.get_paginated_response({
+            "success": True,
+            "status": 200,
+            "message": "Saved products retrieved successfully",
+            "products": serializer.data
+        })

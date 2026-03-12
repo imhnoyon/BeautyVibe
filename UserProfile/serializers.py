@@ -16,12 +16,15 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = ["id", "name", "category", "brand", "shade", "colour_hex", "price", "discount_percentage", "slug"]
         
+        
 #added video upload serializer for product 
 class ProductVideoSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
+    user_name=serializers.CharField(source="user.full_name",read_only=True)
     class Meta:
         model = Video
-        fields = ["id", "product", "video_url",'like_count', 'share_count','saved_video',"created_at"]
+        fields = ["id","user_name","caption", "product", "video_url",'like_count', 'share_count','saved_video',"created_at"]
+        
         
 #serializer for video upload and count view with product details
 class VideoViewSerializer(serializers.ModelSerializer):
@@ -257,3 +260,38 @@ class CreatorVideoSerializer(serializers.ModelSerializer):
     def get_products(self, obj):
         products = Product.objects.filter(product_videos_product=obj)
         return ProductShownCreatorSerializer(products,many=True,context=self.context).data
+    
+    
+    
+from .models import SaveProduct
+
+class ProductViewserializers(serializers.ModelSerializer):
+    class Meta:
+        model=Product
+        fields = [
+            'id',
+            'name',
+            'slug',
+            'brand',
+            'shade',
+            'category',
+            'colour_hex',
+            'price',
+            'discount_percentage',
+            'rating',
+            'description',
+            'image',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'slug', 'created_at']
+        
+class SaveProductSerializer(serializers.ModelSerializer):
+    product=ProductViewserializers(read_only=True)
+    class Meta:
+        model = SaveProduct
+        fields = ["id", "user", "product", "created_at"]
+        read_only_fields = ["id", "user", "created_at"]
+        
+        
+        
+        

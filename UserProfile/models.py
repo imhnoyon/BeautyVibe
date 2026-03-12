@@ -133,3 +133,26 @@ class SharedVideo(models.Model):
 
     def __str__(self):
         return f"{self.user.full_name} shared Video {self.video.id}"
+    
+    
+    
+    
+class SaveProduct(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="saved_products"
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="saved_by_users"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ["user", "product"]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user} - {self.product}"
