@@ -770,3 +770,17 @@ class SavedProductListView(APIView):
             "message": "Saved products retrieved successfully",
             "products": serializer.data
         })
+        
+        
+        
+class UserOwnVideoListView(APIView):
+    permission_classes = [IsCreator]
+
+    def get(self, request):
+        videos = Video.objects.filter(user=request.user).order_by("-created_at")
+        serializer = ProductVideoOwnUserSerializer(videos, many=True , context={"request": request})
+
+        return APIResponse.success(
+            message="User videos fetched successfully",
+            data=serializer.data
+        )

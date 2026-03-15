@@ -478,11 +478,19 @@ class CheckoutView(APIView):
             )
             
             # Create OrderItems (Snapshots)
+            # Retrieve video object if video_id is passed at checkout as a fallback
+            checkout_video = None
+            if video_id:
+                try:
+                    checkout_video = Video.objects.filter(id=video_id).first()
+                except Exception:
+                    pass
+
             for item in cart_items:
                 OrderItem.objects.create(
                     order=order,
                     product=item.product,
-                    video=item.video,
+                    video=item.video or checkout_video,
                     shade=item.shade,
                     colour_hex=item.colour_hex,
                     quantity=item.quantity,
@@ -559,7 +567,7 @@ class CreateCheckoutSessionView(APIView):
                 cancel_url=cancel_url,
                 
                 metadata={
-                    "order_id": order.id
+                    "order_id": str(order.id)
                 }
             )
 
@@ -578,99 +586,135 @@ class CreateCheckoutSessionView(APIView):
             )
         except Exception as e:
             return APIResponse.error(message=f"Stripe error: {str(e)}")
-            
  
 @csrf_exempt
 def stripe_webhook(request):
+    # Merge all webhook logic into one function (handles both checkout and payout)
     payload = request.body
     sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
 
     if not sig_header:
-        return HttpResponse(status=400)
+        return HttpResponse("Missing signature", status=400)
 
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, endpoint_secret
         )
-    except Exception:
-        return HttpResponse(status=400)
+    except Exception as e:
+        print(f"DEBUG Webhook Signature Error: {str(e)}")
+        return HttpResponse(f"Invalid payload: {str(e)}", status=400)
 
-    # Handle the checkout.session.completed event
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        
-        #detect payment method
+    event_type = event["type"]
+    session = event["data"]["object"]
+    print(f"DEBUG: Webhook received for type {event_type} and session/obj {session.get('id')}")
+
+    # --- 1. HANDLE CHECKOUT SESSION COMPLETED ---
+    if event_type == "checkout.session.completed":
+        # Detect payment method info safely
+        actual_payment_method = "stripe"
         payment_intent_id = session.get("payment_intent")
-        if not payment_intent_id:
-            return HttpResponse(status=200)
-
-        payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-        payment_method_id = payment_intent.get("payment_method")
-
-        actual_payment_method = "unknown"
-
-        if payment_method_id:
-            payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
-
-            # Base type: card / link / paypal / etc.
-            method_type = payment_method.type
-            actual_payment_method = method_type
-
-            # Wallet detect for Google Pay / Apple Pay
-            if method_type == "card":
-                card_data = getattr(payment_method, "card", None)
-
-                # stripe-python objects usually support attribute access
-                if card_data and getattr(card_data, "wallet", None):
-                    wallet = card_data.wallet
-                    wallet_type = getattr(wallet, "type", None)
-
-                    if wallet_type == "google_pay":
-                        actual_payment_method = "google_pay"
-                    elif wallet_type == "apple_pay":
-                        actual_payment_method = "apple_pay"
-                    else:
-                        actual_payment_method = "card"
-
         
-        
-        
-        # We can use metadata to get order_id reliably
+        if payment_intent_id:
+            try:
+                payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+                payment_method_id = payment_intent.get("payment_method")
+
+                if payment_method_id:
+                    payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+                    actual_payment_method = getattr(payment_method, "type", "stripe")
+
+                    # Wallet detect for Google Pay / Apple Pay
+                    if actual_payment_method == "card":
+                        card_data = getattr(payment_method, "card", None)
+                        if card_data and getattr(card_data, "wallet", None):
+                            wallet = card_data.wallet
+                            wallet_type = getattr(wallet, "type", None)
+                            if wallet_type in ["google_pay", "apple_pay"]:
+                                actual_payment_method = wallet_type
+            except Exception as e:
+                print(f"DEBUG Error retrieving stripe payment details: {str(e)}")
+
+        # Use metadata or session ID for lookup
         order_id = session.get("metadata", {}).get("order_id")
+        session_id = session.get("id")
+        print(f"DEBUG Checkout Payload: order_id={order_id}, session_id={session_id}")
         
         try:
-            if order_id:
-                order = Order.objects.get(id=order_id)
-            else:
-                # Fallback to session ID lookup
-                order = Order.objects.get(stripe_session_id=session["id"])
+            with transaction.atomic():
+                order = None
+                if order_id:
+                    order = Order.objects.select_for_update().filter(id=order_id).first()
+                if not order:
+                    order = Order.objects.select_for_update().filter(stripe_session_id=session_id).first()
                 
-            if not order.is_paid:
-                order.is_paid = True
-                order.status = 'paid' 
-                order.save()
-                COMMISSION_RATE = settings.COMMISSION_RATE
-                for item in order.items.all():
-                    if item.video and item.video.user:
-                        item_total = item.price * item.quantity
-                        commission_amount = float(item_total) * COMMISSION_RATE
-                        Commission.objects.create(
-                            creator=item.video.user,
-                            video=item.video,
-                            payment_method=actual_payment_method,
-                            order_amount=item_total,
-                            commission_amount=commission_amount
+                if order:
+                    print(f"DEBUG: Found Order {order.id}. is_paid={order.is_paid}")
+                    if not order.is_paid:
+                        order.is_paid = True
+                        order.status = 'paid' 
+                        order.save()
+                        print(f"DEBUG: Order {order.id} marked as paid successfully.")
+                        
+                        # COMMISSION LOGIC: Re-verify items have video attached
+                        COMMISSION_RATE = getattr(settings, 'COMMISSION_RATE', 0.10)
+                        from decimal import Decimal
+                        order_items = order.items.all()
+                        print(f"DEBUG: Order {order.id} has {order_items.count()} items.")
+                        
+                        for item in order_items:
+                            print(f"DEBUG: Processing item {item.id}, video={'linked' if item.video else 'null'}")
+                            if item.video:
+                                if item.video.user:
+                                    item_total = item.price * item.quantity
+                                    comm_amount = item_total * Decimal(str(COMMISSION_RATE))
+                                    
+                                    commission = Commission.objects.create(
+                                        creator=item.video.user,
+                                        video=item.video,
+                                        payment_method=actual_payment_method,
+                                        order_amount=item_total,
+                                        commission_amount=comm_amount
+                                    )
+                                    print(f"DEBUG: Commission {commission.id} created for Creator {item.video.user.id} from Video {item.video.id}")
+                                else:
+                                    print(f"DEBUG: Item {item.id} skipped - video has no user/creator.")
+                            else:
+                                print(f"DEBUG: Item {item.id} skipped - no video linked.")
+                    
+                    # Payment History
+                    if not PaymentHistory.objects.filter(stripe_session_id=session_id).exists():
+                        PaymentHistory.objects.create(
+                            user=order.user,
+                            order=order,
+                            transaction_method=actual_payment_method,
+                            amount=order.total_amount,
+                            stripe_session_id=session_id
                         )
-            PaymentHistory.objects.create(
-            user=order.user,
-            order=order,
-            transaction_method=actual_payment_method,
-            amount=order.total_amount,
-            stripe_session_id=session["id"]
-          )
-        except Order.DoesNotExist:
-            print(f"Order not found for session {session['id']}")
+                        print(f"DEBUG: PaymentHistory logged for session {session_id}")
+                else:
+                    print(f"DEBUG Warning: No matching Order found for checkout session.")
+        except Exception as e:
+            print(f"DEBUG Webhook Checkout Exception: {str(e)}")
+            return HttpResponse(status=500)
+
+    # --- 2. HANDLE PAYOUT EVENTS (Withdrawal) ---
+    elif event_type == "payout.paid":
+        payout_id = session.get("id")
+        withdrawal = CreatorWithdrawal.objects.filter(stripe_payout_id=payout_id).first()
+        if withdrawal:
+            withdrawal.status = "completed"
+            withdrawal.save(update_fields=["status", "updated_at"])
+            print(f"DEBUG: Withdrawal {withdrawal.withdraw_id} marked COMPLETED.")
+
+    elif event_type == "payout.failed":
+        payout_id = session.get("id")
+        withdrawal = CreatorWithdrawal.objects.filter(stripe_payout_id=payout_id).first()
+        if withdrawal:
+            withdrawal.status = "failed"
+            withdrawal.failure_reason = session.get("failure_message") or "Payout failed"
+            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
+            print(f"DEBUG: Withdrawal {withdrawal.withdraw_id} marked FAILED.")
 
     return HttpResponse(status=200)
 
@@ -1268,54 +1312,6 @@ class ApproveWithdrawalView(APIView):
             )
             
             
-#Webhook view
-import stripe
-from django.conf import settings
-from django.http import HttpResponse
-from django.views.decorators.csrf import csrf_exempt
-
-stripe.api_key = settings.STRIPE_SECRET_KEY
-
-
-@csrf_exempt
-def stripe_webhook(request):
-    payload = request.body
-    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload,
-            sig_header,
-            settings.STRIPE_WEBHOOK_SECRET
-        )
-    except Exception:
-        return HttpResponse(status=400)
-
-    event_type = event["type"]
-    obj = event["data"]["object"]
-
-    if event_type == "payout.paid":
-        payout_id = obj.get("id")
-        withdrawal = CreatorWithdrawal.objects.filter(stripe_payout_id=payout_id).first()
-        if withdrawal:
-            withdrawal.status = "completed"
-            withdrawal.save(update_fields=["status", "updated_at"])
-
-    elif event_type == "payout.failed":
-        payout_id = obj.get("id")
-        withdrawal = CreatorWithdrawal.objects.filter(stripe_payout_id=payout_id).first()
-        if withdrawal:
-            withdrawal.status = "failed"
-            withdrawal.failure_reason = obj.get("failure_message") or "Payout failed"
-            withdrawal.save(update_fields=["status", "failure_reason", "updated_at"])
-
-    return HttpResponse(status=200)
-
-
-
-
-
-
 #Withdraw list for Creator-user
 class WithdrawHistoryListView(APIView):
     permission_classes = [IsAuthenticated]

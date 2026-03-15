@@ -6,6 +6,7 @@ urlpatterns = [
     path("categories/products/<int:category_id>/", ProductByCategoryView.as_view()),
     path("products/upload-video/<int:product_id>/",ProductVideoUploadView.as_view(), name="upload-product-video"),
     path("user-videos/", UserVideoListView.as_view(), name="user-videos"),
+    path("creator-videos/", UserOwnVideoListView.as_view(), name="creator-videos"),
     path("videos/watch/<int:video_id>/", VideoWatchView.as_view(), name="video-watch"),
     
     # ✅ creator dashboard

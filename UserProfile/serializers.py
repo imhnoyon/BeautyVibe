@@ -293,5 +293,17 @@ class SaveProductSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "user", "created_at"]
         
         
+#creator user own video list      
+class ProductvideolistSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ["id", "name", "category", "brand", "shade", "colour_hex", "price", "discount_percentage", "slug"]
         
         
+#added video upload serializer for product 
+class ProductVideoOwnUserSerializer(serializers.ModelSerializer):
+    product = ProductvideolistSerializer(read_only=True)
+    user_name=serializers.CharField(source="user.full_name",read_only=True)
+    class Meta:
+        model = Video
+        fields = ["id","user_name","caption", "product", "video_url",'like_count', 'share_count','saved_video',"created_at"]
