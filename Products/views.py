@@ -676,11 +676,11 @@ def stripe_webhook(request):
                                         order_amount=item_total,
                                         commission_amount=comm_amount
                                     )
-                                    print(f"DEBUG: Commission {commission.id} created for Creator {item.video.user.id} from Video {item.video.id}")
+                                    # print(f"DEBUG: Commission {commission.id} created for Creator {item.video.user.id} from Video {item.video.id}")
                                 else:
-                                    print(f"DEBUG: Item {item.id} skipped - video has no user/creator.")
+                                    return APIResponse.error(message=f"Item {item.id} has video with no user/creator", status_code=400)
                             else:
-                                print(f"DEBUG: Item {item.id} skipped - no video linked.")
+                                return APIResponse.error(message=f"Item {item.id} has no video linked", status_code=400)
                     
                     # Payment History
                     if not PaymentHistory.objects.filter(stripe_session_id=session_id).exists():
@@ -691,12 +691,11 @@ def stripe_webhook(request):
                             amount=order.total_amount,
                             stripe_session_id=session_id
                         )
-                        print(f"DEBUG: PaymentHistory logged for session {session_id}")
+                       
                 else:
-                    print(f"DEBUG Warning: No matching Order found for checkout session.")
+                    return APIResponse.error(message="Order not found for this session", status_code=404)
         except Exception as e:
-            print(f"DEBUG Webhook Checkout Exception: {str(e)}")
-            return HttpResponse(status=500)
+            return APIResponse.error(message="An error occurred while processing the webhook", status_code=500)
 
     # --- 2. HANDLE PAYOUT EVENTS (Withdrawal) ---
     elif event_type == "payout.paid":
