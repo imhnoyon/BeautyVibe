@@ -595,6 +595,11 @@ class UserAPIView(APIView):
 
         return paginator.get_paginated_response(serializer.data)
     
+    def delete(self, request, user_id):
+        user = get_object_or_404(User, id=user_id, is_superuser=False)  
+        user.delete()
+        return APIResponse.success(message="User deleted successfully")
+    
     
     
     

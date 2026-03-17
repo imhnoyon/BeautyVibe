@@ -633,12 +633,13 @@ def stripe_webhook(request):
                             if wallet_type in ["google_pay", "apple_pay"]:
                                 actual_payment_method = wallet_type
             except Exception as e:
-                print(f"DEBUG Error retrieving stripe payment details: {str(e)}")
+                # print(f"DEBUG Error retrieving stripe payment details: {str(e)}")
+                return APIResponse.error(message="Error processing payment details", status_code=500)
 
         # Use metadata or session ID for lookup
         order_id = session.get("metadata", {}).get("order_id")
         session_id = session.get("id")
-        print(f"DEBUG Checkout Payload: order_id={order_id}, session_id={session_id}")
+        # print(f"DEBUG Checkout Payload: order_id={order_id}, session_id={session_id}")
         
         try:
             with transaction.atomic():
